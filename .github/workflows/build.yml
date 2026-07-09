@@ -34,16 +34,12 @@ jobs:
 
     - name: Check compiler version
       run: |
-        echo "Compiler version:"
         clang --version
         clang++ --version
 
     - name: Configure CMake
       run: |
-        cmake -B build -G Ninja \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_CXX_STANDARD=20 \
-          -DCMAKE_CXX_FLAGS="-Wall -Wextra -Wpedantic"
+        cmake -B build -G Ninja -DCMAKE_BUILD_TYPE:STRING=Release
 
     - name: Build
       run: |
