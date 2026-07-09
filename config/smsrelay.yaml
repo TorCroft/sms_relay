@@ -1,0 +1,96 @@
+# SMS Relay Configuration File
+# All settings with their default values
+
+# =============================================================================
+# Serial Port Configuration
+# =============================================================================
+serial:
+  # Serial port path
+  # Windows examples: COM3, COM10, \\.\COM10
+  # Linux examples: /dev/ttyUSB0, /dev/ttyACM0
+  port: /dev/ttyUSB0
+
+  # Baudrate (common values: 9600, 115200, 460800, 921600)
+  baudrate: 115200
+
+# =============================================================================
+# SMS Configuration
+# =============================================================================
+sms:
+  # Storage location: ME = Equipment (flash), SM = SIM card, MT = Both
+  storage: "ME"
+
+  # Auto delete received messages after processing
+  auto_delete: true
+
+  # SMS mode: false = PDU mode (recommended), true = Text mode
+  text_mode: false
+
+  # Timing delays (in milliseconds)
+  read_delay_ms: 50          # Delay between reading each message
+  read_delay_long_ms: 100    # Longer delay between operations
+
+  # Enable message caching (improves performance)
+  enable_cache: true
+
+# =============================================================================
+# Forwarding Configuration
+# =============================================================================
+forward:
+  # Master switch for all forwarding
+  enabled: true
+
+  # Forwarding targets (can have multiple)
+  targets:
+    # Example: Bark (iOS push notifications)
+    - type: bark
+      enabled: true  # Set to true to enable this target
+      bark:
+        # Bark server URL (default: https://api.day.app)
+        # You can also use your own Bark server
+        server: "https://api.day.app"
+
+        # Your Bark device key (REQUIRED)
+        # Get it from the Bark app or use https://api.day.app/push to register
+        key: "YOUR_BARK_DEVICE_KEY"
+
+        # Notification template variables:
+        # ${sender} - Sender phone number
+        # ${text}   - SMS text content
+        # ${timestamp} - SMS timestamp
+        # ${index}  - SMS index in storage
+        title: "SMS from ${sender}"
+        body: "${text}"
+
+        # Optional notification settings
+        sound: "telegraphnotify"   # Notification sound
+        # icon: "https://example.com/icon.png"  # Custom icon URL
+        group: "sms_relay"         # Group for notifications
+        # url: "https://example.com"  # URL to open when tapped
+        badge: 1                   # Badge count on app icon
+        level: "active"            # iOS level: active, timeSensitive, passive
+        timeout_ms: 5000           # HTTP request timeout
+
+    # Example: Multiple Bark devices (e.g., primary + backup)
+    # - type: bark
+    #   enabled: false
+    #   bark:
+    #     key: "YOUR_BACKUP_BARK_KEY"
+    #     title: "${sender}"
+    #     body: "${text}"
+
+    # Future: Other targets (Telegram, Discord, etc.)
+    # - type: telegram
+    #   enabled: false
+    #   ...
+
+# =============================================================================
+# IPC Server Configuration
+# =============================================================================
+server:
+  # IPC server port (for CLI communication)
+  port: 7896
+
+  # Server host (default: IPv6 loopback)
+  # Use "::" for all interfaces, "::1" for loopback only
+  host: "::1"
