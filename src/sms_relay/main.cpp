@@ -478,15 +478,15 @@ void signal_handler(int signal)
         if (first_signal.exchange(false))
         {
             std::cout << "\nReceived signal " << signal << ", shutting down..." << std::endl;
-        }
+            std::cout << "Exiting immediately (Ctrl+C)..." << std::endl;
 
-        // Set shutdown flag
-        SmsRelayApp::request_shutdown();
-
-        // Stop the IO context to break out of run() loop
-        if (SmsRelayApp::get_instance())
-        {
-            SmsRelayApp::get_instance()->stop_io_context();
+            // 立即退出，避免所有阻塞和资源清理问题
+            // 操作系统会自动清理所有资源
+#ifdef _WIN32
+            ExitProcess(0);  // Windows
+#else
+            _exit(0);         // Linux/Unix
+#endif
         }
     }
 }
