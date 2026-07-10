@@ -11,7 +11,8 @@ namespace smsrelay::forward {
  * Each forwarding target (Bark, etc.) implements this interface
  * to send notifications when new SMS arrives.
  */
-class ForwardTarget {
+class ForwardTarget
+{
 public:
     virtual ~ForwardTarget() = default;
 
@@ -20,12 +21,12 @@ public:
      * @param sms The incoming SMS to forward
      * @return true if sending was successful
      */
-    virtual bool send(const IncomingSms& sms) = 0;
+    virtual bool send(const IncomingSms &sms) = 0;
 
     /**
      * @brief Get the name of this target type
      */
-    virtual const char* name() const = 0;
+    virtual const char *name() const = 0;
 };
 
 } // namespace smsrelay::forward

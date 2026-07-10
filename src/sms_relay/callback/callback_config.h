@@ -1,13 +1,14 @@
 #pragma once
 
-#include <string>
 #include <map>
+#include <string>
 #include <vector>
 
 namespace smsrelay::callback {
 
-struct CallbackConfig {
-    std::string type;  // "http"
+struct CallbackConfig
+{
+    std::string type; // "http"
     std::string url;
     std::string method = "POST";
     std::map<std::string, std::string> headers;
@@ -16,7 +17,8 @@ struct CallbackConfig {
     int retry_delay_ms = 1000;
 };
 
-struct CallbackServiceConfig {
+struct CallbackServiceConfig
+{
     bool enabled = true;
     std::vector<CallbackConfig> callbacks;
 };

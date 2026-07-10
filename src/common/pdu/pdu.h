@@ -1,11 +1,10 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
-#include <cstdint>
 
-namespace pdu
-{
+namespace pdu {
 
 // =============================================================================
 // Public API - Simple Encode/Decode Interface
@@ -42,11 +41,9 @@ struct PduMessage
  * @throws std::runtime_error if encoding fails
  */
 [[nodiscard]]
-std::vector<std::string> encode_submit(
-    const std::string &number,
-    const std::string &text,
-    uint8_t reference = 0,
-    const std::string &smsc = "");
+std::vector<std::string>
+encode_submit(const std::string &number, const std::string &text,
+              uint8_t reference = 0, const std::string &smsc = "");
 
 /**
  * @brief Decode SMS PDU

@@ -1,12 +1,14 @@
 #include "template_renderer.h"
 #include <algorithm>
-#include <sstream>
 #include <cctype>
 #include <iomanip>
+#include <sstream>
 
 namespace smsrelay::forward {
 
-std::string TemplateRenderer::render(const std::string& tmpl, const IncomingSms& sms) {
+std::string TemplateRenderer::render(const std::string &tmpl,
+                                     const IncomingSms &sms)
+{
     std::string result = tmpl;
 
     // Replace variables in order of longest first to avoid partial replacements
@@ -25,20 +27,26 @@ std::string TemplateRenderer::render(const std::string& tmpl, const IncomingSms&
     return result;
 }
 
-std::string TemplateRenderer::url_encode(const std::string& str) {
+std::string TemplateRenderer::url_encode(const std::string &str)
+{
     std::ostringstream encoded;
     encoded.fill('0');
     encoded << std::hex;
 
-    for (char c : str) {
+    for (char c : str)
+    {
         // Keep alphanumeric and other accepted characters intact
         if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' ||
-            c == '.' || c == '~' || c == ' ') {
+            c == '.' || c == '~' || c == ' ')
+        {
             encoded << c;
-        } else {
+        }
+        else
+        {
             // Any other characters are percent-encoded
             encoded << std::uppercase;
-            encoded << '%' << std::setw(2) << static_cast<int>(static_cast<unsigned char>(c));
+            encoded << '%' << std::setw(2)
+                    << static_cast<int>(static_cast<unsigned char>(c));
             encoded << std::nouppercase;
         }
     }
@@ -46,20 +54,26 @@ std::string TemplateRenderer::url_encode(const std::string& str) {
     return encoded.str();
 }
 
-void TemplateRenderer::replace_all(std::string& str, const std::string& from, const std::string& to) {
-    if (from.empty()) {
+void TemplateRenderer::replace_all(std::string &str, const std::string &from,
+                                   const std::string &to)
+{
+    if (from.empty())
+    {
         return;
     }
 
     size_t start_pos = 0;
-    while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
+    while ((start_pos = str.find(from, start_pos)) != std::string::npos)
+    {
         str.replace(start_pos, from.length(), to);
         start_pos += to.length();
     }
 }
 
-std::string TemplateRenderer::truncate(const std::string& str, size_t max_len) {
-    if (str.length() <= max_len) {
+std::string TemplateRenderer::truncate(const std::string &str, size_t max_len)
+{
+    if (str.length() <= max_len)
+    {
         return str;
     }
     return str.substr(0, max_len);

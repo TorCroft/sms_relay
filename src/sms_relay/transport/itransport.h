@@ -1,9 +1,9 @@
 #pragma once
 
+#include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
-#include <functional>
-#include <cstdint>
 
 namespace smsrelay::transport {
 
@@ -13,10 +13,11 @@ namespace smsrelay::transport {
  * Decouples AT session from concrete transport implementation.
  * Future implementations: SerialPort, TCP, USB CDC, PTY, etc.
  */
-class ITransport {
+class ITransport
+{
 public:
-    using DataCallback = std::function<void(const std::vector<uint8_t>&)>;
-    using ErrorCallback = std::function<void(const std::string&)>;
+    using DataCallback = std::function<void(const std::vector<uint8_t> &)>;
+    using ErrorCallback = std::function<void(const std::string &)>;
 
     virtual ~ITransport() = default;
 
@@ -38,12 +39,12 @@ public:
     /**
      * @brief Write data to transport (async)
      */
-    virtual void write(const std::vector<uint8_t>& data) = 0;
+    virtual void write(const std::vector<uint8_t> &data) = 0;
 
     /**
      * @brief Write string data to transport (async)
      */
-    virtual void write(const std::string& data) = 0;
+    virtual void write(const std::string &data) = 0;
 
     /**
      * @brief Set callback for received data

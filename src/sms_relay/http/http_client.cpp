@@ -1,7 +1,7 @@
 #include "http_client.h"
-#include <sstream>
 #include <iostream>
 #include <memory>
+#include <sstream>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -17,14 +17,11 @@ namespace smsrelay::http {
  * Cross-platform solution that uses the system's curl binary.
  * Works on Linux (including Synology), macOS, and Windows.
  */
-class CurlHttpClient : public HttpClient {
+class CurlHttpClient : public HttpClient
+{
 public:
-    HttpResponse post(
-        const std::string& url,
-        const std::string& body,
-        const std::map<std::string, std::string>& headers,
-        int timeout_ms) override {
-
+    HttpResponse post(const std::string &url, const std::string &body, const std::map<std::string, std::string> &headers, int timeout_ms) override
+    {
         HttpResponse response;
 
         // Build curl command
@@ -32,7 +29,8 @@ public:
         cmd << "curl -s -w \"\\n%{http_code}\" -X POST";
 
         // Add headers
-        for (const auto& [key, value] : headers) {
+        for (const auto &[key, value] : headers)
+        {
             cmd << " -H \"" << key << ": " << value << "\"";
         }
 
@@ -50,27 +48,31 @@ public:
 
         // Parse response (last line is status code)
         size_t last_newline = output.find_last_of("\n");
-        if (last_newline != std::string::npos && last_newline > 0) {
+        if (last_newline != std::string::npos && last_newline > 0)
+        {
             std::string status_line = output.substr(last_newline + 1);
             response.body = output.substr(0, last_newline);
 
-            try {
+            try
+            {
                 response.status_code = std::stoi(status_line);
                 response.success = (response.status_code >= 200 && response.status_code < 300);
-            } catch (...) {
+            }
+            catch (...)
+            {
                 response.error_message = "Failed to parse status code";
             }
-        } else {
+        }
+        else
+        {
             response.error_message = "Invalid curl output";
         }
 
         return response;
     }
 
-    HttpResponse get(
-        const std::string& url,
-        const std::map<std::string, std::string>& headers,
-        int timeout_ms) override {
+    HttpResponse get(const std::string &url, const std::map<std::string, std::string> &headers, int timeout_ms) override
+    {
 
         HttpResponse response;
 
@@ -79,7 +81,8 @@ public:
         cmd << "curl -s -w \"\\n%{http_code}\"";
 
         // Add headers
-        for (const auto& [key, value] : headers) {
+        for (const auto &[key, value] : headers)
+        {
             cmd << " -H \"" << key << ": " << value << "\"";
         }
 
@@ -94,17 +97,24 @@ public:
 
         // Parse response
         size_t last_newline = output.find_last_of("\n");
-        if (last_newline != std::string::npos && last_newline > 0) {
+        if (last_newline != std::string::npos && last_newline > 0)
+        {
             std::string status_line = output.substr(last_newline + 1);
             response.body = output.substr(0, last_newline);
 
-            try {
+            try
+            {
                 response.status_code = std::stoi(status_line);
-                response.success = (response.status_code >= 200 && response.status_code < 300);
-            } catch (...) {
+                response.success =
+                    (response.status_code >= 200 && response.status_code < 300);
+            }
+            catch (...)
+            {
                 response.error_message = "Failed to parse status code";
             }
-        } else {
+        }
+        else
+        {
             response.error_message = "Invalid curl output";
         }
 
@@ -116,12 +126,14 @@ private:
     /**
      * @brief Execute command on Windows
      */
-    std::string execute(const std::string& cmd) {
+    std::string execute(const std::string &cmd)
+    {
         std::string output;
         HANDLE hReadPipe, hWritePipe;
-        SECURITY_ATTRIBUTES sa = { sizeof(SECURITY_ATTRIBUTES), NULL, TRUE };
+        SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
 
-        if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0)) {
+        if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
+        {
             return "";
         }
 
@@ -136,16 +148,18 @@ private:
         PROCESS_INFORMATION pi = {};
         std::string fullCmd = "cmd.exe /c " + cmd;
 
-        if (CreateProcessA(
-                NULL, const_cast<char*>(fullCmd.c_str()),
-                NULL, NULL, TRUE, CREATE_NO_WINDOW,
-                NULL, NULL, &si, &pi)) {
+        if (CreateProcessA(NULL, const_cast<char *>(fullCmd.c_str()), NULL, NULL,
+                           TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
+        {
 
             CloseHandle(hWritePipe);
 
             char buffer[4096];
             DWORD bytesRead;
-            while (ReadFile(hReadPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0) {
+            while (
+                ReadFile(hReadPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL) &&
+                bytesRead > 0)
+            {
                 buffer[bytesRead] = '\0';
                 output += buffer;
             }
@@ -154,7 +168,9 @@ private:
             WaitForSingleObject(pi.hProcess, INFINITE);
             CloseHandle(pi.hProcess);
             CloseHandle(pi.hThread);
-        } else {
+        }
+        else
+        {
             CloseHandle(hReadPipe);
             CloseHandle(hWritePipe);
         }
@@ -165,12 +181,15 @@ private:
     /**
      * @brief Execute command on Linux/Unix
      */
-    std::string execute(const std::string& cmd) {
+    std::string execute(const std::string &cmd)
+    {
         std::string output;
-        FILE* pipe = popen(cmd.c_str(), "r");
-        if (pipe) {
+        FILE *pipe = popen(cmd.c_str(), "r");
+        if (pipe)
+        {
             char buffer[4096];
-            while (fgets(buffer, sizeof(buffer), pipe)) {
+            while (fgets(buffer, sizeof(buffer), pipe))
+            {
                 output += buffer;
             }
             pclose(pipe);
@@ -182,20 +201,39 @@ private:
     /**
      * @brief Escape special characters for shell
      */
-    std::string escape_body(const std::string& str) {
+    std::string escape_body(const std::string &str)
+    {
         std::string escaped;
         escaped.reserve(str.length() * 1.2);
 
-        for (char c : str) {
-            switch (c) {
-                case '"':  escaped += "\\\""; break;
-                case '\\': escaped += "\\\\"; break;
-                case '\n': escaped += "\\n"; break;
-                case '\r': escaped += "\\r"; break;
-                case '\t': escaped += "\\t"; break;
-                case '$':  escaped += "\\$"; break;
-                case '`':  escaped += "\\`"; break;
-                default: escaped += c; break;
+        for (char c : str)
+        {
+            switch (c)
+            {
+                case '"':
+                    escaped += "\\\"";
+                    break;
+                case '\\':
+                    escaped += "\\\\";
+                    break;
+                case '\n':
+                    escaped += "\\n";
+                    break;
+                case '\r':
+                    escaped += "\\r";
+                    break;
+                case '\t':
+                    escaped += "\\t";
+                    break;
+                case '$':
+                    escaped += "\\$";
+                    break;
+                case '`':
+                    escaped += "\\`";
+                    break;
+                default:
+                    escaped += c;
+                    break;
             }
         }
 
@@ -203,7 +241,8 @@ private:
     }
 };
 
-std::unique_ptr<HttpClient> create_default_client() {
+std::unique_ptr<HttpClient> create_default_client()
+{
     return std::make_unique<CurlHttpClient>();
 }
 

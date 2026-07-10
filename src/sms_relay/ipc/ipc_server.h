@@ -1,8 +1,8 @@
 #pragma once
 
 #include "sms_relay/sms/sms_service.h"
-#include <memory>
 #include <atomic>
+#include <memory>
 #include <thread>
 
 #ifdef _WIN32
@@ -10,11 +10,11 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 #else
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <unistd.h>
 #include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #endif
 
 namespace smsrelay::ipc {
@@ -25,7 +25,8 @@ namespace smsrelay::ipc {
  * Runs in the sms_relay service process
  * Uses TCP loopback (127.0.0.1) for local communication
  */
-class IpcServer {
+class IpcServer
+{
 public:
     /**
      * @brief Constructor
@@ -36,8 +37,8 @@ public:
     ~IpcServer();
 
     // Delete copy constructor and assignment operator
-    IpcServer(const IpcServer&) = delete;
-    IpcServer& operator=(const IpcServer&) = delete;
+    IpcServer(const IpcServer &) = delete;
+    IpcServer &operator=(const IpcServer &) = delete;
 
     /**
      * @brief Start the IPC server
@@ -72,32 +73,32 @@ private:
      * @param request Request data
      * @return Response data
      */
-    std::vector<uint8_t> process_command(const std::vector<uint8_t>& request);
+    std::vector<uint8_t> process_command(const std::vector<uint8_t> &request);
 
     /**
      * @brief List messages handler
      */
-    std::vector<uint8_t> handle_list(const std::vector<uint8_t>& payload);
+    std::vector<uint8_t> handle_list(const std::vector<uint8_t> &payload);
 
     /**
      * @brief Read messages handler
      */
-    std::vector<uint8_t> handle_read(const std::vector<uint8_t>& payload);
+    std::vector<uint8_t> handle_read(const std::vector<uint8_t> &payload);
 
     /**
      * @brief Delete messages handler
      */
-    std::vector<uint8_t> handle_delete(const std::vector<uint8_t>& payload);
+    std::vector<uint8_t> handle_delete(const std::vector<uint8_t> &payload);
 
     /**
      * @brief Send message handler
      */
-    std::vector<uint8_t> handle_send(const std::vector<uint8_t>& payload);
+    std::vector<uint8_t> handle_send(const std::vector<uint8_t> &payload);
 
     /**
      * @brief Status handler
      */
-    std::vector<uint8_t> handle_status(const std::vector<uint8_t>& payload);
+    std::vector<uint8_t> handle_status(const std::vector<uint8_t> &payload);
 
     int port_;
     std::shared_ptr<SmsService> sms_service_;
@@ -111,7 +112,7 @@ private:
 #endif
 
     static constexpr uint32_t RECV_BUFFER_SIZE = 4096;
-    static constexpr uint32_t MAX_PAYLOAD_SIZE = 1024 * 1024;  // 1MB max
+    static constexpr uint32_t MAX_PAYLOAD_SIZE = 1024 * 1024; // 1MB max
 };
 
 } // namespace smsrelay::ipc

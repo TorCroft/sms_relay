@@ -1,8 +1,8 @@
 #pragma once
 
-#include <string>
 #include <map>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace smsrelay::http {
@@ -10,7 +10,8 @@ namespace smsrelay::http {
 /**
  * @brief HTTP response structure
  */
-struct HttpResponse {
+struct HttpResponse
+{
     int status_code = 0;
     std::string body;
     std::string error_message;
@@ -23,7 +24,8 @@ struct HttpResponse {
  * Lightweight alternative to libcurl for basic HTTPS POST requests.
  * Only supports what's needed for Bark API.
  */
-class HttpsClient {
+class HttpsClient
+{
 public:
     /**
      * @brief Constructor
@@ -43,11 +45,9 @@ public:
      * @param timeout_ms Timeout in milliseconds
      * @return HTTP response
      */
-    HttpResponse post(
-        const std::string& url,
-        const std::string& body,
-        const std::map<std::string, std::string>& headers = {},
-        int timeout_ms = 5000);
+    HttpResponse post(const std::string &url, const std::string &body,
+                      const std::map<std::string, std::string> &headers = {},
+                      int timeout_ms = 5000);
 
 private:
     class Impl;

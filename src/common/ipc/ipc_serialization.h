@@ -1,33 +1,32 @@
 #pragma once
 
 #include "ipc_protocol.h"
-#include <vector>
-#include <string>
 #include <cstdint>
 #include <cstring>
+#include <string>
+#include <vector>
 
 namespace smsrelay::ipc {
 
 /**
  * @brief IPC serialization utilities
  */
-class IpcSerializer {
+class IpcSerializer
+{
 public:
     // Serialize primitive types
-    static std::vector<uint8_t> serialize_u32(uint32_t value) {
-        return {
-            static_cast<uint8_t>((value >> 24) & 0xFF),
-            static_cast<uint8_t>((value >> 16) & 0xFF),
-            static_cast<uint8_t>((value >> 8) & 0xFF),
-            static_cast<uint8_t>(value & 0xFF)
-        };
+    static std::vector<uint8_t> serialize_u32(uint32_t value)
+    {
+        return {static_cast<uint8_t>((value >> 24) & 0xFF),
+                static_cast<uint8_t>((value >> 16) & 0xFF),
+                static_cast<uint8_t>((value >> 8) & 0xFF),
+                static_cast<uint8_t>(value & 0xFF)};
     }
 
-    static std::vector<uint8_t> serialize_u8(uint8_t value) {
-        return {value};
-    }
+    static std::vector<uint8_t> serialize_u8(uint8_t value) { return {value}; }
 
-    static std::vector<uint8_t> serialize_str(const std::string& str) {
+    static std::vector<uint8_t> serialize_str(const std::string &str)
+    {
         std::vector<uint8_t> result;
         uint32_t len = static_cast<uint32_t>(str.size());
         auto len_bytes = serialize_u32(len);
@@ -36,7 +35,8 @@ public:
         return result;
     }
 
-    static std::vector<uint8_t> serialize_vec(const std::vector<uint8_t>& vec) {
+    static std::vector<uint8_t> serialize_vec(const std::vector<uint8_t> &vec)
+    {
         std::vector<uint8_t> result;
         uint32_t len = static_cast<uint32_t>(vec.size());
         auto len_bytes = serialize_u32(len);
@@ -46,8 +46,11 @@ public:
     }
 
     // Deserialize primitive types
-    static bool deserialize_u32(const uint8_t* data, size_t size, uint32_t& value, size_t& offset) {
-        if (offset + 4 > size) return false;
+    static bool deserialize_u32(const uint8_t *data, size_t size, uint32_t &value,
+                                size_t &offset)
+    {
+        if (offset + 4 > size)
+            return false;
         value = (static_cast<uint32_t>(data[offset]) << 24) |
                 (static_cast<uint32_t>(data[offset + 1]) << 16) |
                 (static_cast<uint32_t>(data[offset + 2]) << 8) |
@@ -56,33 +59,47 @@ public:
         return true;
     }
 
-    static bool deserialize_u8(const uint8_t* data, size_t size, uint8_t& value, size_t& offset) {
-        if (offset >= size) return false;
+    static bool deserialize_u8(const uint8_t *data, size_t size, uint8_t &value,
+                               size_t &offset)
+    {
+        if (offset >= size)
+            return false;
         value = data[offset];
         offset += 1;
         return true;
     }
 
-    static bool deserialize_str(const uint8_t* data, size_t size, std::string& value, size_t& offset) {
+    static bool deserialize_str(const uint8_t *data, size_t size,
+                                std::string &value, size_t &offset)
+    {
         uint32_t len = 0;
-        if (!deserialize_u32(data, size, len, offset)) return false;
-        if (offset + len > size) return false;
-        value.assign(reinterpret_cast<const char*>(data + offset), len);
+        if (!deserialize_u32(data, size, len, offset))
+            return false;
+        if (offset + len > size)
+            return false;
+        value.assign(reinterpret_cast<const char *>(data + offset), len);
         offset += len;
         return true;
     }
 
-    static bool deserialize_vec(const uint8_t* data, size_t size, std::vector<uint8_t>& value, size_t& offset) {
+    static bool deserialize_vec(const uint8_t *data, size_t size,
+                                std::vector<uint8_t> &value, size_t &offset)
+    {
         uint32_t len = 0;
-        if (!deserialize_u32(data, size, len, offset)) return false;
-        if (offset + len > size) return false;
+        if (!deserialize_u32(data, size, len, offset))
+            return false;
+        if (offset + len > size)
+            return false;
         value.assign(data + offset, data + offset + len);
         offset += len;
         return true;
     }
 
     // Serialize complete request
-    static std::vector<uint8_t> serialize_request(CommandType cmd, uint32_t seq, const std::vector<uint8_t>& payload) {
+    static std::vector<uint8_t>
+    serialize_request(CommandType cmd, uint32_t seq,
+                      const std::vector<uint8_t> &payload)
+    {
         std::vector<uint8_t> result;
 
         // Header
@@ -103,7 +120,10 @@ public:
     }
 
     // Serialize response
-    static std::vector<uint8_t> serialize_response(Status status, uint32_t seq, const std::vector<uint8_t>& payload) {
+    static std::vector<uint8_t>
+    serialize_response(Status status, uint32_t seq,
+                       const std::vector<uint8_t> &payload)
+    {
         std::vector<uint8_t> result;
 
         // Header
@@ -127,10 +147,12 @@ public:
 /**
  * @brief Payload serializers for specific commands
  */
-class PayloadSerializer {
+class PayloadSerializer
+{
 public:
     // List SMS
-    static std::vector<uint8_t> serialize_list(const ListSmsRequest& req) {
+    static std::vector<uint8_t> serialize_list(const ListSmsRequest &req)
+    {
         std::vector<uint8_t> result;
         auto status_bytes = IpcSerializer::serialize_str(req.status);
         result.insert(result.end(), status_bytes.begin(), status_bytes.end());
@@ -138,7 +160,8 @@ public:
     }
 
     // Read SMS
-    static std::vector<uint8_t> serialize_read(const ReadSmsRequest& req) {
+    static std::vector<uint8_t> serialize_read(const ReadSmsRequest &req)
+    {
         std::vector<uint8_t> result;
         auto indices_bytes = IpcSerializer::serialize_vec(req.indices);
         result.insert(result.end(), indices_bytes.begin(), indices_bytes.end());
@@ -146,7 +169,8 @@ public:
     }
 
     // Delete SMS
-    static std::vector<uint8_t> serialize_delete(const DeleteSmsRequest& req) {
+    static std::vector<uint8_t> serialize_delete(const DeleteSmsRequest &req)
+    {
         std::vector<uint8_t> result;
         auto indices_bytes = IpcSerializer::serialize_vec(req.indices);
         result.insert(result.end(), indices_bytes.begin(), indices_bytes.end());
@@ -154,7 +178,8 @@ public:
     }
 
     // Send SMS
-    static std::vector<uint8_t> serialize_send(const SendSmsRequest& req) {
+    static std::vector<uint8_t> serialize_send(const SendSmsRequest &req)
+    {
         std::vector<uint8_t> result;
         auto recipient_bytes = IpcSerializer::serialize_str(req.recipient);
         auto text_bytes = IpcSerializer::serialize_str(req.text);
@@ -164,21 +189,32 @@ public:
     }
 
     // Deserialize SMS info
-    static bool deserialize_sms_info(const uint8_t* data, size_t size, SmsInfo& info, size_t& offset) {
+    static bool deserialize_sms_info(const uint8_t *data, size_t size,
+                                     SmsInfo &info, size_t &offset)
+    {
         uint8_t has_udh_val = 0;
         uint8_t concat_seq_val = 0;
         uint8_t concat_total_val = 0;
         uint8_t is_combined_val = 0;
 
-        if (!IpcSerializer::deserialize_u8(data, size, info.index, offset)) return false;
-        if (!IpcSerializer::deserialize_str(data, size, info.sender, offset)) return false;
-        if (!IpcSerializer::deserialize_str(data, size, info.text, offset)) return false;
-        if (!IpcSerializer::deserialize_str(data, size, info.timestamp, offset)) return false;
-        if (!IpcSerializer::deserialize_u8(data, size, has_udh_val, offset)) return false;
-        if (!IpcSerializer::deserialize_u8(data, size, concat_seq_val, offset)) return false;
-        if (!IpcSerializer::deserialize_u8(data, size, concat_total_val, offset)) return false;
-        if (!IpcSerializer::deserialize_u8(data, size, info.status, offset)) return false;
-        if (!IpcSerializer::deserialize_u8(data, size, is_combined_val, offset)) return false;
+        if (!IpcSerializer::deserialize_u8(data, size, info.index, offset))
+            return false;
+        if (!IpcSerializer::deserialize_str(data, size, info.sender, offset))
+            return false;
+        if (!IpcSerializer::deserialize_str(data, size, info.text, offset))
+            return false;
+        if (!IpcSerializer::deserialize_str(data, size, info.timestamp, offset))
+            return false;
+        if (!IpcSerializer::deserialize_u8(data, size, has_udh_val, offset))
+            return false;
+        if (!IpcSerializer::deserialize_u8(data, size, concat_seq_val, offset))
+            return false;
+        if (!IpcSerializer::deserialize_u8(data, size, concat_total_val, offset))
+            return false;
+        if (!IpcSerializer::deserialize_u8(data, size, info.status, offset))
+            return false;
+        if (!IpcSerializer::deserialize_u8(data, size, is_combined_val, offset))
+            return false;
 
         info.has_udh = has_udh_val != 0;
         info.concat_seq = concat_seq_val;
@@ -186,16 +222,22 @@ public:
         info.is_combined = is_combined_val != 0;
 
         // Deserialize parts if combined
-        if (info.is_combined) {
+        if (info.is_combined)
+        {
             uint32_t part_count = 0;
-            if (!IpcSerializer::deserialize_u32(data, size, part_count, offset)) return false;
+            if (!IpcSerializer::deserialize_u32(data, size, part_count, offset))
+                return false;
 
-            for (uint32_t i = 0; i < part_count; ++i) {
+            for (uint32_t i = 0; i < part_count; ++i)
+            {
                 SmsPartInfo part;
                 uint8_t index, seq, total;
-                if (!IpcSerializer::deserialize_u8(data, size, index, offset)) return false;
-                if (!IpcSerializer::deserialize_u8(data, size, seq, offset)) return false;
-                if (!IpcSerializer::deserialize_u8(data, size, total, offset)) return false;
+                if (!IpcSerializer::deserialize_u8(data, size, index, offset))
+                    return false;
+                if (!IpcSerializer::deserialize_u8(data, size, seq, offset))
+                    return false;
+                if (!IpcSerializer::deserialize_u8(data, size, total, offset))
+                    return false;
                 part.index = index;
                 part.seq = seq;
                 part.total = total;
@@ -207,7 +249,8 @@ public:
     }
 
     // Serialize SMS info
-    static std::vector<uint8_t> serialize_sms_info(const SmsInfo& info) {
+    static std::vector<uint8_t> serialize_sms_info(const SmsInfo &info)
+    {
         std::vector<uint8_t> result;
         auto index_bytes = IpcSerializer::serialize_u8(info.index);
         auto sender_bytes = IpcSerializer::serialize_str(info.sender);
@@ -227,14 +270,19 @@ public:
         result.insert(result.end(), seq_bytes.begin(), seq_bytes.end());
         result.insert(result.end(), total_bytes.begin(), total_bytes.end());
         result.insert(result.end(), status_bytes.begin(), status_bytes.end());
-        result.insert(result.end(), is_combined_bytes.begin(), is_combined_bytes.end());
+        result.insert(result.end(), is_combined_bytes.begin(),
+                      is_combined_bytes.end());
 
         // Serialize parts if combined
-        if (info.is_combined) {
-            auto part_count_bytes = IpcSerializer::serialize_u32(static_cast<uint32_t>(info.parts.size()));
-            result.insert(result.end(), part_count_bytes.begin(), part_count_bytes.end());
+        if (info.is_combined)
+        {
+            auto part_count_bytes = IpcSerializer::serialize_u32(
+                static_cast<uint32_t>(info.parts.size()));
+            result.insert(result.end(), part_count_bytes.begin(),
+                          part_count_bytes.end());
 
-            for (const auto& part : info.parts) {
+            for (const auto &part : info.parts)
+            {
                 result.push_back(part.index);
                 result.push_back(part.seq);
                 result.push_back(part.total);

@@ -2,7 +2,9 @@
 
 namespace smsrelay::at {
 
-std::future<ResponseBuilder::AtResponse> CommandQueue::enqueue(std::string cmd) {
+std::future<ResponseBuilder::AtResponse>
+CommandQueue::enqueue(std::string cmd)
+{
     auto promise = std::make_shared<std::promise<ResponseBuilder::AtResponse>>();
     auto future = promise->get_future();
 
@@ -18,9 +20,11 @@ std::future<ResponseBuilder::AtResponse> CommandQueue::enqueue(std::string cmd) 
     return future;
 }
 
-CommandQueue::QueuedCommand CommandQueue::dequeue() {
+CommandQueue::QueuedCommand CommandQueue::dequeue()
+{
     std::lock_guard<std::mutex> lock(mutex_);
-    if (queue_.empty()) {
+    if (queue_.empty())
+    {
         return {};
     }
 

@@ -1,8 +1,8 @@
 #pragma once
 
+#include <atomic>
 #include <string>
 #include <vector>
-#include <atomic>
 
 namespace smsrelay::at {
 
@@ -15,9 +15,11 @@ namespace smsrelay::at {
  * - Waiting for final OK after PDU send
  * - Complete when OK/ERROR received
  */
-class ResponseBuilder {
+class ResponseBuilder
+{
 public:
-    enum class State {
+    enum class State
+    {
         Idle,            // No command in progress
         WaitingResponse, // Waiting for response lines
         WaitingPrompt,   // Waiting for > prompt (AT+CMGS)
@@ -30,13 +32,13 @@ public:
     /**
      * @brief Start building response for new command
      */
-    void start_command(const std::string& cmd);
+    void start_command(const std::string &cmd);
 
     /**
      * @brief Add a line to current response
      * @return true if response is complete
      */
-    bool add_line(const std::string& line);
+    bool add_line(const std::string &line);
 
     /**
      * @brief Get current state
@@ -46,15 +48,16 @@ public:
     /**
      * @brief Get current command being processed
      */
-    const std::string& current_command() const { return current_command_; }
+    const std::string &current_command() const { return current_command_; }
 
     /**
      * @brief Get completed response
      */
-    struct AtResponse {
+    struct AtResponse
+    {
         bool success = false;
-        std::string status;           // "OK", "ERROR", "TIMEOUT"
-        std::string error_code;       // Error code if any
+        std::string status;            // "OK", "ERROR", "TIMEOUT"
+        std::string error_code;        // Error code if any
         std::vector<std::string> data; // Response data lines
     };
 
@@ -70,7 +73,7 @@ private:
     std::string current_command_;
     std::vector<std::string> response_lines_;
 
-    bool is_complete_line(const std::string& line) const;
+    bool is_complete_line(const std::string &line) const;
 };
 
 } // namespace smsrelay::at

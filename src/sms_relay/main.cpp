@@ -9,17 +9,32 @@
  * - Forward service for push notifications
  */
 
-#include "sms_relay/transport/serial_transport.h"
-#include "sms_relay/at/at_session.h"
-#include "sms_relay/sms/sms_service.h"
-#include "sms_relay/ipc/ipc_server.h"
-#include "sms_relay/forward/forward_service.h"
 #include "common/app_config.h"
 #include "common/config_loader.h"
-#include <iostream>
-#include <thread>
+#include "sms_relay/at/at_session.h"
+#include "sms_relay/forward/forward_service.h"
+#include "sms_relay/ipc/ipc_server.h"
+#include "sms_relay/sms/sms_service.h"
+#include "sms_relay/transport/serial_transport.h"
+#include <atomic>
 #include <chrono>
+#include <future>
+#include <iostream>
 #include <memory>
+#include <thread>
+
+// ============================================================================
+// Application Constants
+// ============================================================================
+
+namespace {
+// Connection management
+constexpr int CONNECTION_TIMEOUT_SECONDS = 5;
+constexpr auto MODEM_STABILIZATION_DELAY = std::chrono::milliseconds(1000);
+
+// Message deletion timing
+constexpr auto MESSAGE_DELETE_DELAY = std::chrono::milliseconds(50);
+} // namespace
 
 using namespace smsrelay;
 using namespace smsrelay::transport;
@@ -42,10 +57,7 @@ public:
      * @brief Constructor with configuration
      * @param config Application configuration
      */
-    explicit SmsRelayApp(const AppConfig &config)
-        : config_(config)
-    {
-    }
+    explicit SmsRelayApp(const AppConfig &config) : config_(config) {}
 
     /**
      * @brief Start the SMS relay service
@@ -53,7 +65,9 @@ public:
      */
     bool start()
     {
-        std::cout << "SMS Relay - Port: " << config_.serial.port << " | Forward: " << (config_.forward.enabled ? "ON" : "OFF") << std::endl;
+        std::cout << "SMS Relay - Port: " << config_.serial.port
+                  << " | Forward: " << (config_.forward.enabled ? "ON" : "OFF")
+                  << std::endl;
         std::cout << std::endl;
 
         try
@@ -137,8 +151,13 @@ private:
      */
     void create_components()
     {
+        // Reset connection promise for new connection attempt
+        connection_promise_ = std::promise<bool>();
+        connection_established_ = false;
+
         // Create async serial transport from config
-        transport::SerialConfig serial_config(config_.serial.port, config_.serial.baudrate);
+        transport::SerialConfig serial_config(config_.serial.port,
+                                              config_.serial.baudrate);
         transport_ = std::make_shared<SerialTransport>(*io_ctx_, serial_config);
 
         // Create async AT session
@@ -148,10 +167,12 @@ private:
         sms_service_ = std::make_shared<SmsService>(at_session_, config_.sms);
 
         // Create Forward service with config
-        forward_service_ = std::make_unique<smsrelay::forward::ForwardService>(config_.forward);
+        forward_service_ =
+            std::make_unique<smsrelay::forward::ForwardService>(config_.forward);
 
         // Create IPC server with config
-        ipc_server_ = std::make_unique<smsrelay::ipc::IpcServer>(config_.ipc_server.port, sms_service_);
+        ipc_server_ = std::make_unique<smsrelay::ipc::IpcServer>(
+            config_.ipc_server.port, sms_service_);
     }
 
     /**
@@ -159,13 +180,36 @@ private:
      */
     void setup_callbacks()
     {
+        // Set up connection callback
+        transport_->set_connection_callback([this](bool connected) {
+            if (connected)
+            {
+                std::cout << "[Transport] Connected to " << config_.serial.port
+                          << std::endl;
+                connection_established_ = true;
+                connection_promise_.set_value(true);
+            }
+            else
+            {
+                std::cerr << "[Transport] Disconnected from " << config_.serial.port
+                          << std::endl;
+                if (!connection_established_)
+                {
+                    // Connection failed during initial attempt
+                    connection_promise_.set_value(false);
+                }
+            }
+        });
+
         // Callback for new SMS
-        sms_service_->set_new_sms_callback([this](const IncomingSms &sms)
-                                           { on_new_sms(sms); });
+        sms_service_->set_new_sms_callback(
+            [this](const IncomingSms &sms) { on_new_sms(sms); });
 
         // URC callback to forward +CMTI to SMS service
-        at_session_->set_urc_callback([this](const std::string &urc, const std::string &args)
-                                      { on_urc(urc, args); });
+        at_session_->set_urc_callback(
+            [this](const std::string &urc, const std::string &args) {
+                on_urc(urc, args);
+            });
     }
 
     /**
@@ -173,32 +217,44 @@ private:
      */
     void start_io_thread()
     {
-        io_thread_ = std::make_unique<std::thread>([this]()
-                                                   { io_ctx_->run(); });
+        io_thread_ = std::make_unique<std::thread>([this]() { io_ctx_->run(); });
         at_session_->start();
     }
 
     /**
-     * @brief Wait for serial connection
+     * @brief Wait for serial connection (async with timeout)
      * @return true if connected successfully
      */
     bool wait_for_connection()
     {
-        for (int i = 0; i < 50; ++i)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            if (transport_->is_connected())
-                break;
-        }
+        std::cout << "Waiting for serial connection..." << std::endl;
 
-        if (!transport_->is_connected())
+        // Wait for connection with timeout
+        auto future = connection_promise_.get_future();
+        if (future.wait_for(std::chrono::seconds(CONNECTION_TIMEOUT_SECONDS)) !=
+            std::future_status::timeout)
         {
-            std::cerr << "Failed to connect to " << config_.serial.port << std::endl;
+            bool connected = future.get();
+            if (connected)
+            {
+                std::cout << "[System] Serial connection established" << std::endl;
+                // Give modem a moment to stabilize after connection
+                std::this_thread::sleep_for(MODEM_STABILIZATION_DELAY);
+                return true;
+            }
+            else
+            {
+                std::cerr << "[System] Serial connection failed" << std::endl;
+                return false;
+            }
+        }
+        else
+        {
+            // Timeout occurred
+            std::cerr << "[System] Timeout waiting for serial connection ("
+                      << CONNECTION_TIMEOUT_SECONDS << "s)" << std::endl;
             return false;
         }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        return true;
     }
 
     /**
@@ -248,7 +304,8 @@ private:
      */
     void on_new_sms(const IncomingSms &sms)
     {
-        std::cout << "[SMS] " << sms.decoded.number << ": " << sms.decoded.text << std::endl;
+        std::cout << "[SMS] " << sms.decoded.number << ": " << sms.decoded.text
+                  << std::endl;
 
         // Forward to configured targets
         bool forward_success = false;
@@ -275,7 +332,7 @@ private:
             for (uint8_t idx : indices_to_delete)
             {
                 sms_service_->delete_message(sms_service_->get_storage(), idx);
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                std::this_thread::sleep_for(MESSAGE_DELETE_DELAY);
             }
             std::cout << "[SMS] Deleted" << std::endl;
         }
@@ -323,6 +380,10 @@ private:
     std::shared_ptr<SmsService> sms_service_;
     std::unique_ptr<smsrelay::ipc::IpcServer> ipc_server_;
     std::unique_ptr<smsrelay::forward::ForwardService> forward_service_;
+
+    // Connection handling
+    std::promise<bool> connection_promise_;
+    std::atomic<bool> connection_established_{false};
 };
 
 /**

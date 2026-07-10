@@ -12,7 +12,7 @@ namespace smsrelay {
  * @return AppConfig Loaded configuration
  * @throws std::runtime_error if file cannot be loaded or parsed
  */
-AppConfig load_config(const std::string& config_path);
+AppConfig load_config(const std::string &config_path);
 
 /**
  * @brief Load application configuration from default location

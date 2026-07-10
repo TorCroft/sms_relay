@@ -1,11 +1,11 @@
 #pragma once
 
 #include "sms_relay/at/response_builder.h"
-#include <string>
-#include <queue>
+#include <future>
 #include <memory>
 #include <mutex>
-#include <future>
+#include <queue>
+#include <string>
 
 namespace smsrelay::at {
 
@@ -15,7 +15,8 @@ namespace smsrelay::at {
  * Commands are executed in FIFO order.
  * Returns std::future for async result retrieval.
  */
-class CommandQueue {
+class CommandQueue
+{
 public:
     CommandQueue() = default;
 
@@ -28,7 +29,8 @@ public:
     /**
      * @brief Get next command structure
      */
-    struct QueuedCommand {
+    struct QueuedCommand
+    {
         std::string text;
         std::shared_ptr<std::promise<ResponseBuilder::AtResponse>> promise;
     };
@@ -38,7 +40,8 @@ public:
     /**
      * @brief Check if queue is empty
      */
-    bool empty() const {
+    bool empty() const
+    {
         std::lock_guard<std::mutex> lock(mutex_);
         return queue_.empty();
     }
@@ -46,7 +49,8 @@ public:
     /**
      * @brief Get queue size
      */
-    size_t size() const {
+    size_t size() const
+    {
         std::lock_guard<std::mutex> lock(mutex_);
         return queue_.size();
     }
@@ -57,4 +61,3 @@ private:
 };
 
 } // namespace smsrelay::at
-

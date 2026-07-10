@@ -4,7 +4,8 @@
 
 namespace smsrelay::callback {
 
-struct CallbackResult {
+struct CallbackResult
+{
     bool success = false;
     int status_code = 0;
     std::string response;

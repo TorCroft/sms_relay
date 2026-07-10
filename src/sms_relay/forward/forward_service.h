@@ -1,12 +1,12 @@
 #pragma once
 
-#include "sms_relay/forward/forward_target.h"
-#include "sms_relay/sms/sms_service.h"
 #include "common/app_config.h"
+#include "sms_relay/forward/forward_target.h"
 #include "sms_relay/http/http_client.h"
+#include "sms_relay/sms/sms_service.h"
 #include <memory>
-#include <vector>
 #include <mutex>
+#include <vector>
 
 namespace smsrelay::forward {
 
@@ -16,13 +16,14 @@ namespace smsrelay::forward {
  * Manages multiple forwarding targets and sends notifications
  * when new SMS messages arrive.
  */
-class ForwardService {
+class ForwardService
+{
 public:
     /**
      * @brief Constructor
      * @param config Forward configuration
      */
-    explicit ForwardService(const ForwardConfig& config);
+    explicit ForwardService(const ForwardConfig &config);
 
     /**
      * @brief Destructor
@@ -34,7 +35,7 @@ public:
      * @param sms Incoming SMS to forward
      * @return Number of targets that successfully received the notification
      */
-    int forward(const IncomingSms& sms);
+    int forward(const IncomingSms &sms);
 
     /**
      * @brief Check if forwarding is enabled
@@ -55,7 +56,8 @@ private:
     /**
      * @brief Create a single target from config
      */
-    std::unique_ptr<ForwardTarget> create_target(const ForwardTargetConfig& target_config);
+    std::unique_ptr<ForwardTarget>
+    create_target(const ForwardTargetConfig &target_config);
 
     ForwardConfig config_;
     std::vector<std::unique_ptr<ForwardTarget>> targets_;
