@@ -65,6 +65,8 @@ public:
     {
         // Set global instance pointer for signal handler
         instance_ = this;
+        // Reset shutdown flag
+        reset_shutdown_flag();
     }
 
     /**
@@ -81,6 +83,33 @@ public:
      * @return Pointer to the current instance, or nullptr if none
      */
     static SmsRelayApp* get_instance() { return instance_; }
+
+    /**
+     * @brief Check if shutdown was requested
+     * @return true if shutdown was requested
+     */
+    static bool is_shutdown_requested() { return shutdown_requested_.load(); }
+
+    /**
+     * @brief Request shutdown
+     */
+    static void request_shutdown() { shutdown_requested_ = true; }
+
+    /**
+     * @brief Reset shutdown flag (for starting new instance)
+     */
+    static void reset_shutdown_flag() { shutdown_requested_ = false; }
+
+    /**
+     * @brief Stop IO context immediately (for signal handler)
+     */
+    void stop_io_context()
+    {
+        if (io_ctx_)
+        {
+            io_ctx_->stop();
+        }
+    }
 
     /**
      * @brief Start the SMS relay service
@@ -146,7 +175,23 @@ public:
         std::signal(SIGINT, signal_handler);
         std::signal(SIGTERM, signal_handler);
 
-        // Join IO thread (blocking until stop() is called)
+        // Wait for shutdown signal or IO thread completion
+        while (!is_shutdown_requested())
+        {
+            // Check if IO thread is still alive
+            if (!io_thread_ || !io_thread_->joinable())
+            {
+                break; // IO thread has exited
+            }
+
+            // Small sleep to avoid busy waiting
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+        // Perform graceful shutdown in main thread
+        stop();
+
+        // Join IO thread
         if (io_thread_ && io_thread_->joinable())
         {
             io_thread_->join();
@@ -162,6 +207,7 @@ public:
 
         if (ipc_server_)
         {
+            std::cout << "[IPC Server] Stopping..." << std::endl;
             ipc_server_->stop();
         }
 
@@ -415,20 +461,32 @@ private:
 
     // Global instance pointer for signal handler
     static SmsRelayApp* instance_;
+    static std::atomic<bool> shutdown_requested_;
 };
 
 // Static member initialization
 SmsRelayApp* SmsRelayApp::instance_ = nullptr;
+std::atomic<bool> SmsRelayApp::shutdown_requested_{false};
 
 // Signal handler function
 void signal_handler(int signal)
 {
     if (signal == SIGINT || signal == SIGTERM)
     {
-        std::cout << "\nReceived signal " << signal << ", shutting down..." << std::endl;
+        // Only print on first signal
+        static std::atomic<bool> first_signal{true};
+        if (first_signal.exchange(false))
+        {
+            std::cout << "\nReceived signal " << signal << ", shutting down..." << std::endl;
+        }
+
+        // Set shutdown flag
+        SmsRelayApp::request_shutdown();
+
+        // Stop the IO context to break out of run() loop
         if (SmsRelayApp::get_instance())
         {
-            SmsRelayApp::get_instance()->stop();
+            SmsRelayApp::get_instance()->stop_io_context();
         }
     }
 }
