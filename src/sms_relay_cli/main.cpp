@@ -31,6 +31,10 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
 // Default server configuration (shared with server via app_config.h)
 // Use fully qualified names: smsrelay::IPCServerDefaults::*
 
@@ -768,6 +772,12 @@ private:
 
 int main(int argc, char *argv[])
 {
+#ifdef _WIN32
+    // Set console output to UTF-8 for proper Chinese character display
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
+
     CliApp app;
     return app.run(argc, argv);
 }
