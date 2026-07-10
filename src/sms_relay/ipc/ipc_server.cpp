@@ -271,6 +271,12 @@ void IpcServer::accept_loop()
             continue;
         }
 
+        // Join any existing thread for this slot before reusing it
+        if (clients_[client_idx].handler_thread.joinable())
+        {
+            clients_[client_idx].handler_thread.join();
+        }
+
         // Add client connection
         {
             std::lock_guard<std::mutex> lock(clients_mutex_);
@@ -415,20 +421,27 @@ void IpcServer::handle_client_thread(int client_idx)
 cleanup:
     std::cout << "[IPC Server] Thread " << client_idx << " exiting" << std::endl;
 
-    // Close socket (this must be done in the thread before exit)
+    // Properly close socket to prevent resource leaks
+    {
+        std::lock_guard<std::mutex> lock(clients_mutex_);
+        ClientConnection &client = clients_[client_idx];
+
 #ifdef _WIN32
-    if (client.socket_fd != INVALID_SOCKET)
-    {
-        closesocket(client.socket_fd);
-        client.socket_fd = INVALID_SOCKET;
-    }
+        if (client.socket_fd != INVALID_SOCKET)
+        {
+            closesocket(client.socket_fd);
+            client.socket_fd = INVALID_SOCKET;
+        }
 #else
-    if (client.socket_fd >= 0)
-    {
-        close(client.socket_fd);
-        client.socket_fd = -1;
-    }
+        if (client.socket_fd >= 0)
+        {
+            close(client.socket_fd);
+            client.socket_fd = -1;
+        }
 #endif
+
+        client.active = false;
+    }
 }
 
 std::vector<uint8_t> IpcServer::process_command(const std::vector<uint8_t> &request)

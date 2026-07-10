@@ -18,10 +18,14 @@
 #include "sms_relay/transport/serial_transport.h"
 #include <atomic>
 #include <chrono>
+#include <csignal>
 #include <future>
 #include <iostream>
 #include <memory>
 #include <thread>
+
+// Forward declaration for signal handler
+void signal_handler(int signal);
 
 // ============================================================================
 // Application Constants
@@ -57,7 +61,26 @@ public:
      * @brief Constructor with configuration
      * @param config Application configuration
      */
-    explicit SmsRelayApp(const AppConfig &config) : config_(config) {}
+    explicit SmsRelayApp(const AppConfig &config) : config_(config)
+    {
+        // Set global instance pointer for signal handler
+        instance_ = this;
+    }
+
+    /**
+     * @brief Destructor
+     */
+    ~SmsRelayApp()
+    {
+        // Clear global instance pointer
+        instance_ = nullptr;
+    }
+
+    /**
+     * @brief Get the current application instance
+     * @return Pointer to the current instance, or nullptr if none
+     */
+    static SmsRelayApp* get_instance() { return instance_; }
 
     /**
      * @brief Start the SMS relay service
@@ -119,6 +142,11 @@ public:
      */
     void run()
     {
+        // Register signal handlers
+        std::signal(SIGINT, signal_handler);
+        std::signal(SIGTERM, signal_handler);
+
+        // Join IO thread (blocking until stop() is called)
         if (io_thread_ && io_thread_->joinable())
         {
             io_thread_->join();
@@ -384,7 +412,26 @@ private:
     // Connection handling
     std::promise<bool> connection_promise_;
     std::atomic<bool> connection_established_{false};
+
+    // Global instance pointer for signal handler
+    static SmsRelayApp* instance_;
 };
+
+// Static member initialization
+SmsRelayApp* SmsRelayApp::instance_ = nullptr;
+
+// Signal handler function
+void signal_handler(int signal)
+{
+    if (signal == SIGINT || signal == SIGTERM)
+    {
+        std::cout << "\nReceived signal " << signal << ", shutting down..." << std::endl;
+        if (SmsRelayApp::get_instance())
+        {
+            SmsRelayApp::get_instance()->stop();
+        }
+    }
+}
 
 /**
  * @brief Print usage information
