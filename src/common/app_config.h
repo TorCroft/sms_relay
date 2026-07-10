@@ -70,10 +70,17 @@ struct ForwardConfig
 // IPC Server Configuration
 // =============================================================================
 
+// Default IPC server configuration constants
+namespace IPCServerDefaults {
+    constexpr int DEFAULT_PORT = 7896;
+    constexpr const char* DEFAULT_HOST = "::1";
+    constexpr const char* DEFAULT_SERVER = "::1:7896"; // Combined "host:port" format
+}
+
 struct IpcServerConfig
 {
-    int port = 7896;          // IPC server port
-    std::string host = "::1"; // IPC server host (IPv6 loopback)
+    int port = IPCServerDefaults::DEFAULT_PORT;          // IPC server port
+    std::string host = IPCServerDefaults::DEFAULT_HOST;  // IPC server host (IPv6 loopback)
 };
 
 // =============================================================================

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/app_config.h"
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -28,10 +29,11 @@ class IpcClient
 public:
     /**
      * @brief Constructor
-     * @param host Server hostname or IP (default: "::1" for IPv6 loopback)
-     * @param port TCP port number
+     * @param host Server hostname or IP (default: from shared config)
+     * @param port TCP port number (default: from shared config)
      */
-    IpcClient(const std::string &host = "::1", int port = 7896);
+    IpcClient(const std::string &host = smsrelay::IPCServerDefaults::DEFAULT_HOST,
+              int port = smsrelay::IPCServerDefaults::DEFAULT_PORT);
 
     ~IpcClient();
 

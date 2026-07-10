@@ -10,8 +10,15 @@
  *   delete --index INDICES       Delete SMS
  *   send --to NUMBER --text TEXT  Send SMS
  *   status                          Get service status
+ *
+ * Options:
+ *   --server SERVER              Server address in "host:port" format
+ *                                 (default: ::1:7896)
+ *
+ * Default port: 7896 (defined by smsrelay::IPCServerDefaults::DEFAULT_PORT constant)
  */
 
+#include "common/app_config.h"
 #include "common/ipc/ipc_protocol.h"
 #include "common/ipc/ipc_serialization.h"
 #include "ipc/ipc_client.h"
@@ -23,6 +30,9 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+// Default server configuration (shared with server via app_config.h)
+// Use fully qualified names: smsrelay::IPCServerDefaults::*
 
 using namespace smsrelay::cli;
 using namespace smsrelay::ipc;
@@ -115,10 +125,7 @@ void print_sms_table(const std::vector<SmsInfo> &messages)
         // Status column (width 12)
         std::cout << std::setw(12) << status_to_string(sms.status) << " ";
         // Sender column (width 20)
-        std::cout << std::setw(20)
-                  << (sms.sender.length() > 20 ? sms.sender.substr(0, 17) + "..."
-                                               : sms.sender)
-                  << " ";
+        std::cout << std::setw(20) << (sms.sender.length() > 20 ? sms.sender.substr(0, 17) + "..." : sms.sender) << " ";
         // Time column
         std::cout << sms.timestamp << std::endl;
     }
@@ -133,8 +140,7 @@ void print_sms_info_full(const SmsInfo &sms)
     std::cout << "From: " << sms.sender << std::endl;
     std::cout << "Time: " << sms.timestamp << std::endl;
     std::cout << "Text: " << sms.text << std::endl;
-    std::cout << "============================\n"
-              << std::endl;
+    std::cout << "============================\n" << std::endl;
 }
 
 // ============================================================================
@@ -155,29 +161,22 @@ public:
      * @param args Command arguments
      * @return Exit code (0 for success)
      */
-    virtual int execute(IpcClient &client,
-                        const std::vector<std::string> &args) = 0;
+    virtual int execute(IpcClient &client, const std::vector<std::string> &args) = 0;
 
 protected:
     /**
      * @brief Parse response header
      */
-    bool parse_header(const std::vector<uint8_t> &response, uint32_t &magic,
-                      uint32_t &length, uint32_t &status_code,
-                      uint32_t &sequence_id, size_t &offset) const
+    bool parse_header(const std::vector<uint8_t> &response, uint32_t &magic, uint32_t &length, uint32_t &status_code, uint32_t &sequence_id, size_t &offset) const
     {
         offset = 0;
-        if (!IpcSerializer::deserialize_u32(response.data(), response.size(), magic,
-                                            offset))
+        if (!IpcSerializer::deserialize_u32(response.data(), response.size(), magic, offset))
             return false;
-        if (!IpcSerializer::deserialize_u32(response.data(), response.size(),
-                                            length, offset))
+        if (!IpcSerializer::deserialize_u32(response.data(), response.size(), length, offset))
             return false;
-        if (!IpcSerializer::deserialize_u32(response.data(), response.size(),
-                                            status_code, offset))
+        if (!IpcSerializer::deserialize_u32(response.data(), response.size(), status_code, offset))
             return false;
-        if (!IpcSerializer::deserialize_u32(response.data(), response.size(),
-                                            sequence_id, offset))
+        if (!IpcSerializer::deserialize_u32(response.data(), response.size(), sequence_id, offset))
             return false;
         return true;
     }
@@ -197,8 +196,7 @@ protected:
 class ListCommand : public CommandHandler
 {
 public:
-    int execute(IpcClient &client,
-                const std::vector<std::string> &args) override
+    int execute(IpcClient &client, const std::vector<std::string> &args) override
     {
         std::string status = "ALL";
 
@@ -241,15 +239,13 @@ public:
             return 1;
         }
 
-        if (!IpcSerializer::deserialize_u32(response.data(), response.size(), count,
-                                            offset))
+        if (!IpcSerializer::deserialize_u32(response.data(), response.size(), count, offset))
         {
             std::cerr << "Error: Invalid response" << std::endl;
             return 1;
         }
 
-        std::cout << "Total messages: " << count << "\n"
-                  << std::endl;
+        std::cout << "Total messages: " << count << "\n" << std::endl;
 
         // Collect all messages first
         std::vector<SmsInfo> messages;
@@ -276,8 +272,7 @@ public:
 class ReadCommand : public CommandHandler
 {
 public:
-    int execute(IpcClient &client,
-                const std::vector<std::string> &args) override
+    int execute(IpcClient &client, const std::vector<std::string> &args) override
     {
         std::vector<uint8_t> indices;
 
@@ -314,8 +309,7 @@ public:
         size_t offset = 0;
         uint32_t magic, length, status_code, sequence_id, count;
 
-        if (!parse_header(response, magic, length, status_code, sequence_id,
-                          offset))
+        if (!parse_header(response, magic, length, status_code, sequence_id, offset))
         {
             std::cerr << "Error: Invalid response" << std::endl;
             return 1;
@@ -327,8 +321,7 @@ public:
             return 1;
         }
 
-        if (!IpcSerializer::deserialize_u32(response.data(), response.size(), count,
-                                            offset))
+        if (!IpcSerializer::deserialize_u32(response.data(), response.size(), count, offset))
         {
             std::cerr << "Error: Invalid response" << std::endl;
             return 1;
@@ -343,8 +336,7 @@ public:
         for (uint32_t i = 0; i < count; ++i)
         {
             SmsInfo sms;
-            if (PayloadSerializer::deserialize_sms_info(
-                    response.data(), response.size(), sms, offset))
+            if (PayloadSerializer::deserialize_sms_info(response.data(), response.size(), sms, offset))
             {
                 print_sms_info_full(sms);
             }
@@ -360,8 +352,7 @@ public:
 class DeleteCommand : public CommandHandler
 {
 public:
-    int execute(IpcClient &client,
-                const std::vector<std::string> &args) override
+    int execute(IpcClient &client, const std::vector<std::string> &args) override
     {
         std::vector<uint8_t> indices;
 
@@ -490,8 +481,7 @@ public:
         size_t offset = 0;
         uint32_t magic, length, status_code, sequence_id;
 
-        if (!parse_header(response, magic, length, status_code, sequence_id,
-                          offset))
+        if (!parse_header(response, magic, length, status_code, sequence_id, offset))
         {
             std::cerr << "Error: Invalid response" << std::endl;
             return 1;
@@ -501,8 +491,7 @@ public:
         {
             std::cerr << "Error: Failed to send SMS" << std::endl;
             std::string error_msg;
-            if (IpcSerializer::deserialize_str(response.data(), response.size(),
-                                               error_msg, offset))
+            if (IpcSerializer::deserialize_str(response.data(), response.size(), error_msg, offset))
             {
                 std::cerr << "  " << error_msg << std::endl;
             }
@@ -520,8 +509,7 @@ public:
 class StatusCommand : public CommandHandler
 {
 public:
-    int execute(IpcClient &client,
-                const std::vector<std::string> & /* args */) override
+    int execute(IpcClient &client, const std::vector<std::string> & /* args */) override
     {
         // Build request
         auto payload = std::vector<uint8_t>{};
@@ -540,8 +528,7 @@ public:
         size_t offset = 0;
         uint32_t magic, length, status_code, sequence_id;
 
-        if (!parse_header(response, magic, length, status_code, sequence_id,
-                          offset))
+        if (!parse_header(response, magic, length, status_code, sequence_id, offset))
         {
             std::cerr << "Error: Invalid response" << std::endl;
             return 1;
@@ -557,12 +544,9 @@ public:
         std::string port_str;
         uint32_t msg_count = 0;
 
-        IpcSerializer::deserialize_u8(response.data(), response.size(), connected,
-                                      offset);
-        IpcSerializer::deserialize_str(response.data(), response.size(), port_str,
-                                       offset);
-        IpcSerializer::deserialize_u32(response.data(), response.size(), msg_count,
-                                       offset);
+        IpcSerializer::deserialize_u8(response.data(), response.size(), connected, offset);
+        IpcSerializer::deserialize_str(response.data(), response.size(), port_str, offset);
+        IpcSerializer::deserialize_u32(response.data(), response.size(), msg_count, offset);
 
         std::cout << "Service Status:" << std::endl;
         std::cout << "  Connected: " << (connected ? "Yes" : "No") << std::endl;
@@ -603,11 +587,10 @@ public:
         CommandLineArgs args = parse_arguments(argc, argv);
 
         // Connect to server
-        IpcClient client(args.server, args.port);
+        IpcClient client(args.host, args.port);
         if (!client.connect())
         {
-            std::cerr << "Error: Failed to connect to sms_relay service at "
-                      << args.server << ":" << args.port << std::endl;
+            std::cerr << "Error: Failed to connect to sms_relay service at " << args.server << std::endl;
             std::cerr << "Make sure sms_relay is running" << std::endl;
             return 1;
         }
@@ -625,11 +608,43 @@ private:
      */
     struct CommandLineArgs
     {
-        std::string server = "::1";
-        int port = 8888;
+        std::string server = smsrelay::IPCServerDefaults::DEFAULT_SERVER;
+        std::string host;
+        int port = smsrelay::IPCServerDefaults::DEFAULT_PORT;
         std::string command;
         std::vector<std::string> command_args;
     };
+
+    /**
+     * @brief Parse server string (format: "host:port")
+     */
+    void parse_server_string(const std::string &server, std::string &host, int &port)
+    {
+        size_t colon_pos = server.find_last_of(':');
+        if (colon_pos != std::string::npos)
+        {
+            host = server.substr(0, colon_pos);
+            try
+            {
+                port = std::stoi(server.substr(colon_pos + 1));
+            }
+            catch (...)
+            {
+                std::cerr << "Warning: Invalid port in server string, using default port " << smsrelay::IPCServerDefaults::DEFAULT_PORT << std::endl;
+                port = smsrelay::IPCServerDefaults::DEFAULT_PORT;
+            }
+        }
+        else
+        {
+            host = server;
+        }
+
+        // Handle IPv6 addresses in brackets (e.g., "[::1]:7896")
+        if (!host.empty() && host[0] == '[' && host[host.length() - 1] == ']')
+        {
+            host = host.substr(1, host.length() - 2);
+        }
+    }
 
     /**
      * @brief Parse command line arguments
@@ -646,10 +661,6 @@ private:
             {
                 args.server = argv[++i];
             }
-            else if (arg == "--port" && i + 1 < argc)
-            {
-                args.port = std::stoi(argv[++i]);
-            }
             else if (args.command.empty())
             {
                 args.command = arg;
@@ -659,6 +670,9 @@ private:
                 args.command_args.push_back(arg);
             }
         }
+
+        // Parse server string to extract host and port
+        parse_server_string(args.server, args.host, args.port);
 
         return args;
     }
@@ -723,19 +737,16 @@ private:
         std::cout << "Usage:\n";
         std::cout << "  sms_relay_cli <command> [options]\n\n";
         std::cout << "Commands:\n";
-        std::cout << "  list [--status STATUS]       List all SMS (status: ALL, "
-                     "REC UNREAD, etc.)\n";
-        std::cout << "  read --index INDICES         Read specific SMS "
-                     "(comma-separated: 1,2,3)\n";
-        std::cout << "  delete --index INDICES       Delete SMS (comma-separated: "
-                     "1,2,3)\n";
+        std::cout << "  list [--status STATUS]       List all SMS (status: ALL, REC UNREAD, etc.)\n";
+        std::cout << "  read --index INDICES         Read specific SMS (comma-separated: 1,2,3)\n";
+        std::cout << "  delete --index INDICES       Delete SMS (comma-separated: " "1,2,3)\n";
         std::cout << "  send --to NUMBER --text TEXT  Send new SMS\n";
         std::cout << "  status                          Get service status\n\n";
         std::cout << "Options:\n";
-        std::cout << "  --server SERVER     Server address (default: ::1)\n";
+        std::cout << "  --server SERVER     Server address in \"host:port\" format (default: " << smsrelay::IPCServerDefaults::DEFAULT_SERVER << ")\n";
         std::cout
             << "                      Can be hostname, IPv4, or IPv6 address\n";
-        std::cout << "  --port PORT         Server port (default: 8888)\n\n";
+        std::cout << "                      IPv6 addresses must be in brackets: [::1]:" << smsrelay::IPCServerDefaults::DEFAULT_PORT << "\n\n";
         std::cout << "Examples:\n";
         std::cout << "  sms_relay_cli list\n";
         std::cout << "  sms_relay_cli list --status \"REC UNREAD\"\n";
@@ -745,8 +756,9 @@ private:
             << "  sms_relay_cli send --to \"+1234567890\" --text \"Hello World\"\n";
         std::cout << "  sms_relay_cli status\n";
         std::cout << "\nRemote server examples:\n";
-        std::cout << "  sms_relay_cli --server sms-relay.example.com list\n";
-        std::cout << "  sms_relay_cli --server 192.168.1.100 --port 9999 status\n";
+        std::cout << "  sms_relay_cli --server sms-relay.example.com:" << smsrelay::IPCServerDefaults::DEFAULT_PORT << " list\n";
+        std::cout << "  sms_relay_cli --server 192.168.1.100:9999 status\n";
+        std::cout << "  sms_relay_cli --server [2001:db8::1]:" << smsrelay::IPCServerDefaults::DEFAULT_PORT << " list\n";
     }
 };
 

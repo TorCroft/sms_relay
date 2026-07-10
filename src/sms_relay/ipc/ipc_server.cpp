@@ -207,8 +207,7 @@ void IpcServer::accept_loop()
             // IPv4-mapped IPv6 address
             inet_ntop(AF_INET, &client_addr.sin6_addr, client_ip, sizeof(client_ip));
         }
-        std::cout << "[IPC Server] Client connected from " << client_ip
-                  << std::endl;
+        std::cout << "[IPC Server] Client connected from " << client_ip << std::endl;
 
         // Handle client
         handle_client(client_fd);
@@ -230,12 +229,9 @@ void IpcServer::handle_client(int client_fd)
     while (header_received < 16)
     {
 #ifdef _WIN32
-        int received =
-            recv(client_fd, reinterpret_cast<char *>(header_buf + header_received),
-                 static_cast<int>(16 - header_received), 0);
+        int received = recv(client_fd, reinterpret_cast<char *>(header_buf + header_received), static_cast<int>(16 - header_received), 0);
 #else
-        ssize_t received =
-            recv(client_fd, header_buf + header_received, 16 - header_received, 0);
+        ssize_t received = recv(client_fd, header_buf + header_received, 16 - header_received, 0);
 #endif
         if (received <= 0)
         {
@@ -260,8 +256,7 @@ void IpcServer::handle_client(int client_fd)
     // Verify magic
     if (magic != IPC_MAGIC)
     {
-        std::cerr << "[IPC Server] Invalid magic number: 0x" << std::hex << magic
-                  << std::endl;
+        std::cerr << "[IPC Server] Invalid magic number: 0x" << std::hex << magic << std::endl;
         return;
     }
 
@@ -282,13 +277,9 @@ void IpcServer::handle_client(int client_fd)
         while (payload_received < length)
         {
 #ifdef _WIN32
-            int received =
-                recv(client_fd,
-                     reinterpret_cast<char *>(payload.data() + payload_received),
-                     static_cast<int>(length - payload_received), 0);
+            int received = recv(client_fd, reinterpret_cast<char *>(payload.data() + payload_received), static_cast<int>(length - payload_received), 0);
 #else
-            ssize_t received = recv(client_fd, payload.data() + payload_received,
-                                    length - payload_received, 0);
+            ssize_t received = recv(client_fd, payload.data() + payload_received, length - payload_received, 0);
 #endif
             if (received <= 0)
             {
@@ -310,38 +301,32 @@ void IpcServer::handle_client(int client_fd)
     if (!response.empty())
     {
 #ifdef _WIN32
-        send(client_fd, reinterpret_cast<const char *>(response.data()),
-             static_cast<int>(response.size()), 0);
+        send(client_fd, reinterpret_cast<const char *>(response.data()), static_cast<int>(response.size()), 0);
 #else
         send(client_fd, response.data(), response.size(), 0);
 #endif
     }
 }
 
-std::vector<uint8_t>
-IpcServer::process_command(const std::vector<uint8_t> &request)
+std::vector<uint8_t> IpcServer::process_command(const std::vector<uint8_t> &request)
 {
     // Parse header
     size_t offset = 0;
     uint32_t magic, length, command_type, sequence_id;
 
-    if (!IpcSerializer::deserialize_u32(request.data(), request.size(), magic,
-                                        offset))
+    if (!IpcSerializer::deserialize_u32(request.data(), request.size(), magic, offset))
     {
         return IpcSerializer::serialize_response(Status::FAILED, 0, {});
     }
-    if (!IpcSerializer::deserialize_u32(request.data(), request.size(), length,
-                                        offset))
+    if (!IpcSerializer::deserialize_u32(request.data(), request.size(), length, offset))
     {
         return IpcSerializer::serialize_response(Status::FAILED, 0, {});
     }
-    if (!IpcSerializer::deserialize_u32(request.data(), request.size(),
-                                        command_type, offset))
+    if (!IpcSerializer::deserialize_u32(request.data(), request.size(), command_type, offset))
     {
         return IpcSerializer::serialize_response(Status::FAILED, 0, {});
     }
-    if (!IpcSerializer::deserialize_u32(request.data(), request.size(),
-                                        sequence_id, offset))
+    if (!IpcSerializer::deserialize_u32(request.data(), request.size(), sequence_id, offset))
     {
         return IpcSerializer::serialize_response(Status::FAILED, 0, {});
     }
@@ -369,16 +354,13 @@ IpcServer::process_command(const std::vector<uint8_t> &request)
             case CommandType::STATUS:
                 return handle_status(payload);
             default:
-                std::cerr << "[IPC Server] Unknown command: " << command_type
-                          << std::endl;
-                return IpcSerializer::serialize_response(Status::INVALID_ARGS,
-                                                         sequence_id, {});
+                std::cerr << "[IPC Server] Unknown command: " << command_type << std::endl;
+                return IpcSerializer::serialize_response(Status::INVALID_ARGS, sequence_id, {});
         }
     }
     catch (const std::exception &e)
     {
-        std::cerr << "[IPC Server] Exception processing command: " << e.what()
-                  << std::endl;
+        std::cerr << "[IPC Server] Exception processing command: " << e.what() << std::endl;
         return IpcSerializer::serialize_response(Status::FAILED, sequence_id, {});
     }
 }
@@ -389,8 +371,7 @@ IpcServer::handle_list(const std::vector<uint8_t> &payload)
     // Parse payload
     size_t offset = 0;
     std::string status;
-    if (!IpcSerializer::deserialize_str(payload.data(), payload.size(), status,
-                                        offset))
+    if (!IpcSerializer::deserialize_str(payload.data(), payload.size(), status, offset))
     {
         return IpcSerializer::serialize_response(Status::INVALID_ARGS, 0, {});
     }
@@ -400,10 +381,8 @@ IpcServer::handle_list(const std::vector<uint8_t> &payload)
 
     // Build response
     std::vector<uint8_t> response_payload;
-    auto count_bytes =
-        IpcSerializer::serialize_u32(static_cast<uint32_t>(messages.size()));
-    response_payload.insert(response_payload.end(), count_bytes.begin(),
-                            count_bytes.end());
+    auto count_bytes = IpcSerializer::serialize_u32(static_cast<uint32_t>(messages.size()));
+    response_payload.insert(response_payload.end(), count_bytes.begin(), count_bytes.end());
 
     for (const auto &msg : messages)
     {
@@ -418,12 +397,10 @@ IpcServer::handle_list(const std::vector<uint8_t> &payload)
         info.status = msg.status;
 
         auto sms_bytes = PayloadSerializer::serialize_sms_info(info);
-        response_payload.insert(response_payload.end(), sms_bytes.begin(),
-                                sms_bytes.end());
+        response_payload.insert(response_payload.end(), sms_bytes.begin(), sms_bytes.end());
     }
 
-    return IpcSerializer::serialize_response(Status::SUCCESS, 0,
-                                             response_payload);
+    return IpcSerializer::serialize_response(Status::SUCCESS, 0, response_payload);
 }
 
 std::vector<uint8_t>
@@ -432,8 +409,7 @@ IpcServer::handle_read(const std::vector<uint8_t> &payload)
     // Parse payload
     size_t offset = 0;
     std::vector<uint8_t> indices;
-    if (!IpcSerializer::deserialize_vec(payload.data(), payload.size(), indices,
-                                        offset))
+    if (!IpcSerializer::deserialize_vec(payload.data(), payload.size(), indices, offset))
     {
         return IpcSerializer::serialize_response(Status::INVALID_ARGS, 0, {});
     }
