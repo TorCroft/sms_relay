@@ -325,26 +325,26 @@ void IpcServer::handle_client_thread(int client_idx)
         if (!IpcSerializer::deserialize_u32(header_buf, 16, magic, offset))
         {
             std::cerr << "[IPC Server] Client " << client_idx << ": Failed to parse magic" << std::endl;
-            remove_client(client_idx);
-            return;
+            client.active = false;
+            goto cleanup;
         }
         if (!IpcSerializer::deserialize_u32(header_buf, 16, length, offset))
         {
             std::cerr << "[IPC Server] Client " << client_idx << ": Failed to parse length" << std::endl;
-            remove_client(client_idx);
-            return;
+            client.active = false;
+            goto cleanup;
         }
         if (!IpcSerializer::deserialize_u32(header_buf, 16, command_type, offset))
         {
             std::cerr << "[IPC Server] Client " << client_idx << ": Failed to parse command type" << std::endl;
-            remove_client(client_idx);
-            return;
+            client.active = false;
+            goto cleanup;
         }
         if (!IpcSerializer::deserialize_u32(header_buf, 16, sequence_id, offset))
         {
             std::cerr << "[IPC Server] Client " << client_idx << ": Failed to parse sequence ID" << std::endl;
-            remove_client(client_idx);
-            return;
+            client.active = false;
+            goto cleanup;
         }
 
         // Verify magic
@@ -352,16 +352,16 @@ void IpcServer::handle_client_thread(int client_idx)
         {
             std::cerr << "[IPC Server] Client " << client_idx << ": Invalid magic number: 0x"
                       << std::hex << magic << std::endl;
-            remove_client(client_idx);
-            return;
+            client.active = false;
+            goto cleanup;
         }
 
         // Check payload length
         if (length > MAX_PAYLOAD_SIZE)
         {
             std::cerr << "[IPC Server] Client " << client_idx << ": Payload too large: " << length << std::endl;
-            remove_client(client_idx);
-            return;
+            client.active = false;
+            goto cleanup;
         }
 
         // Read payload if any
@@ -385,8 +385,8 @@ void IpcServer::handle_client_thread(int client_idx)
                 {
                     std::cout << "[IPC Server] Client " << client_idx << " disconnected during payload read"
                               << std::endl;
-                    remove_client(client_idx);
-                    return;
+                    client.active = false;
+                    goto cleanup;
                 }
                 payload_received += received;
             }

@@ -183,6 +183,7 @@ IpcClient::send_command(const std::vector<uint8_t> &request)
     if (sent <= 0)
     {
         std::cerr << "[IPC Client] Send failed" << std::endl;
+        disconnect(); // Connection is broken
         return {};
     }
 #else
@@ -190,6 +191,7 @@ IpcClient::send_command(const std::vector<uint8_t> &request)
     if (sent <= 0)
     {
         std::cerr << "[IPC Client] Send failed" << std::endl;
+        disconnect(); // Connection is broken
         return {};
     }
 #endif
@@ -211,6 +213,7 @@ IpcClient::send_command(const std::vector<uint8_t> &request)
         if (received <= 0)
         {
             std::cerr << "[IPC Client] Receive header failed" << std::endl;
+            disconnect(); // Connection is broken
             return {};
         }
         header_received += received;
@@ -221,18 +224,31 @@ IpcClient::send_command(const std::vector<uint8_t> &request)
     uint32_t magic, length, status, sequence;
 
     if (!IpcSerializer::deserialize_u32(header_buf, 16, magic, offset))
+    {
+        disconnect();
         return {};
+    }
     if (!IpcSerializer::deserialize_u32(header_buf, 16, length, offset))
+    {
+        disconnect();
         return {};
+    }
     if (!IpcSerializer::deserialize_u32(header_buf, 16, status, offset))
+    {
+        disconnect();
         return {};
+    }
     if (!IpcSerializer::deserialize_u32(header_buf, 16, sequence, offset))
+    {
+        disconnect();
         return {};
+    }
 
     // Verify magic
     if (magic != IPC_MAGIC)
     {
         std::cerr << "[IPC Client] Invalid magic number in response" << std::endl;
+        disconnect();
         return {};
     }
 
@@ -258,6 +274,7 @@ IpcClient::send_command(const std::vector<uint8_t> &request)
             if (received <= 0)
             {
                 std::cerr << "[IPC Client] Receive payload failed" << std::endl;
+                disconnect(); // Connection is broken
                 return {};
             }
             payload_received += received;
