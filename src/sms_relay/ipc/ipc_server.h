@@ -1,9 +1,12 @@
 #pragma once
 
+#include "common/app_config.h"
 #include "sms_relay/sms/sms_service.h"
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <thread>
+#include <vector>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -20,9 +23,34 @@
 namespace smsrelay::ipc {
 
 /**
+ * @brief Client connection information
+ */
+struct ClientConnection
+{
+#ifdef _WIN32
+    SOCKET socket_fd;
+#else
+    int socket_fd;
+#endif
+    std::string address;
+    std::thread handler_thread;
+    bool active;
+
+    ClientConnection() : active(false)
+    {
+#ifdef _WIN32
+        socket_fd = INVALID_SOCKET;
+#else
+        socket_fd = -1;
+#endif
+    }
+};
+
+/**
  * @brief TCP-based IPC Server for handling CLI commands
  *
  * Runs in the sms_relay service process
+ * Supports multiple concurrent client connections (max: MAX_CLIENT_CONNECTIONS)
  * Uses TCP loopback (127.0.0.1) for local communication
  */
 class IpcServer
@@ -56,6 +84,11 @@ public:
      */
     bool is_running() const { return running_.load(); }
 
+    /**
+     * @brief Get current number of active client connections
+     */
+    int get_active_connections() const;
+
 private:
     /**
      * @brief Accept client connections (main loop)
@@ -63,10 +96,22 @@ private:
     void accept_loop();
 
     /**
-     * @brief Handle a single client connection
-     * @param client_fd Client socket file descriptor
+     * @brief Handle a single client connection (runs in separate thread)
+     * @param client_idx Index in clients_ vector
      */
-    void handle_client(int client_fd);
+    void handle_client_thread(int client_idx);
+
+    /**
+     * @brief Remove a client connection
+     * @param client_idx Index in clients_ vector
+     */
+    void remove_client(int client_idx);
+
+    /**
+     * @brief Find an available client slot
+     * @return Index of available slot, or -1 if none available
+     */
+    int find_available_client_slot();
 
     /**
      * @brief Process command and return response
@@ -104,6 +149,11 @@ private:
     std::shared_ptr<SmsService> sms_service_;
     std::atomic<bool> running_{false};
     std::thread server_thread_;
+
+    // Client connection management
+    std::vector<ClientConnection> clients_;
+    std::mutex clients_mutex_;
+    static constexpr int MAX_CLIENTS = IPCServerDefaults::MAX_CLIENT_CONNECTIONS;
 
 #ifdef _WIN32
     SOCKET server_fd_{INVALID_SOCKET};

@@ -41,14 +41,17 @@ bool IpcClient::connect()
     }
 
 #ifdef _WIN32
-    // Initialize Winsock
-    WSADATA wsa_data;
-    if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0)
+    // Initialize Winsock (only if not already initialized)
+    if (!wsa_initialized_)
     {
-        std::cerr << "[IPC Client] WSAStartup failed" << std::endl;
-        return false;
+        WSADATA wsa_data;
+        if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0)
+        {
+            std::cerr << "[IPC Client] WSAStartup failed" << std::endl;
+            return false;
+        }
+        wsa_initialized_ = true;
     }
-    wsa_initialized_ = true;
 #endif
 
     // Use getaddrinfo to support hostnames, IPv4, and IPv6
@@ -66,8 +69,7 @@ bool IpcClient::connect()
     {
 #ifdef _WIN32
         std::cerr << "[IPC Client] getaddrinfo failed: " << ret << std::endl;
-        WSACleanup();
-        wsa_initialized_ = false;
+        // Don't cleanup WSA here, it will be cleaned up in destructor/disconnect
 #else
         std::cerr << "[IPC Client] getaddrinfo failed: " << gai_strerror(ret)
                   << std::endl;

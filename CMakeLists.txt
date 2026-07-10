@@ -99,6 +99,20 @@ if(NOT nlohmann_json_FOUND)
     add_subdirectory(${nlohmann_json_SOURCE_DIR} ${nlohmann_json_BINARY_DIR})
 endif()
 
+# replxx - Interactive CLI library
+FetchContent_Declare(
+    replxx
+    GIT_REPOSITORY https://github.com/AmokHuginnsson/replxx.git
+    GIT_TAG master
+    GIT_SHALLOW TRUE
+)
+
+FetchContent_GetProperties(replxx)
+if(NOT replxx_POPULATED)
+    FetchContent_Populate(replxx)
+    add_subdirectory(${replxx_SOURCE_DIR} ${replxx_BINARY_DIR})
+endif()
+
 # ============================================================================
 # sms_relay - Main service
 # ============================================================================
@@ -148,6 +162,7 @@ endif()
 add_executable(sms_relay_cli
     src/sms_relay_cli/main.cpp
     src/sms_relay_cli/ipc/ipc_client.cpp
+    src/sms_relay_cli/interactive_shell.cpp
 )
 
 target_include_directories(sms_relay_cli PRIVATE
@@ -156,6 +171,7 @@ target_include_directories(sms_relay_cli PRIVATE
 
 target_link_libraries(sms_relay_cli PRIVATE
     asio::asio
+    replxx::replxx
 )
 
 if(MSVC)

@@ -18,7 +18,7 @@
 namespace smsrelay::ipc {
 
 IpcServer::IpcServer(int port, std::shared_ptr<SmsService> sms_service)
-    : port_(port), sms_service_(sms_service)
+    : port_(port), sms_service_(sms_service), clients_(MAX_CLIENTS)
 {
 #ifdef _WIN32
     server_fd_ = INVALID_SOCKET;
@@ -27,7 +27,11 @@ IpcServer::IpcServer(int port, std::shared_ptr<SmsService> sms_service)
 #endif
 }
 
-IpcServer::~IpcServer() { stop(); }
+IpcServer::~IpcServer()
+{
+    // Just call stop - it handles all cleanup including WSACleanup
+    stop();
+}
 
 bool IpcServer::start()
 {
@@ -84,8 +88,7 @@ bool IpcServer::start()
     address.sin6_addr = in6addr_any;
     address.sin6_port = htons(port_);
 
-    if (bind(server_fd_, reinterpret_cast<struct sockaddr *>(&address),
-             sizeof(address)) < 0)
+    if (bind(server_fd_, reinterpret_cast<struct sockaddr *>(&address), sizeof(address)) < 0)
     {
         std::cerr << "[IPC Server] Failed to bind to port " << port_ << std::endl;
 #ifdef _WIN32
@@ -126,6 +129,9 @@ void IpcServer::stop()
         return;
     }
 
+    std::cout << "[IPC Server] Stopping..." << std::endl;
+
+    // First, stop accepting new connections
     running_.store(false);
 
     // Close server socket to unblock accept()
@@ -135,8 +141,6 @@ void IpcServer::stop()
         closesocket(server_fd_);
         server_fd_ = INVALID_SOCKET;
     }
-    // Cleanup Winsock
-    WSACleanup();
 #else
     if (server_fd_ >= 0)
     {
@@ -145,11 +149,56 @@ void IpcServer::stop()
     }
 #endif
 
-    // Wait for thread to finish
+    // Close all client connections
+    {
+        std::lock_guard<std::mutex> lock(clients_mutex_);
+        for (int i = 0; i < MAX_CLIENTS; ++i)
+        {
+            if (clients_[i].active)
+            {
+                std::cout << "[IPC Server] Disconnecting client " << i << std::endl;
+
+#ifdef _WIN32
+                if (clients_[i].socket_fd != INVALID_SOCKET)
+                {
+                    closesocket(clients_[i].socket_fd);
+                    clients_[i].socket_fd = INVALID_SOCKET;
+                }
+#else
+                if (clients_[i].socket_fd >= 0)
+                {
+                    close(clients_[i].socket_fd);
+                    clients_[i].socket_fd = -1;
+                }
+#endif
+                clients_[i].active = false;
+            }
+        }
+    }
+
+    // Wait for accept thread to finish
     if (server_thread_.joinable())
     {
         server_thread_.join();
     }
+
+    // Wait for all client threads to finish
+    {
+        std::lock_guard<std::mutex> lock(clients_mutex_);
+        for (int i = 0; i < MAX_CLIENTS; ++i)
+        {
+            if (clients_[i].handler_thread.joinable())
+            {
+                clients_[i].handler_thread.join();
+            }
+        }
+    }
+
+#ifdef _WIN32
+    // Cleanup Winsock (only when server is completely stopped)
+    // This should be called once per process, not per connection
+    WSACleanup();
+#endif
 
     std::cout << "[IPC Server] Stopped" << std::endl;
 }
@@ -207,105 +256,179 @@ void IpcServer::accept_loop()
             // IPv4-mapped IPv6 address
             inet_ntop(AF_INET, &client_addr.sin6_addr, client_ip, sizeof(client_ip));
         }
-        std::cout << "[IPC Server] Client connected from " << client_ip << std::endl;
 
-        // Handle client
-        handle_client(client_fd);
-
+        // Find available client slot
+        int client_idx = find_available_client_slot();
+        if (client_idx < 0)
+        {
+            std::cerr << "[IPC Server] Maximum connections reached, rejecting client from "
+                      << client_ip << std::endl;
 #ifdef _WIN32
-        closesocket(client_fd);
+            closesocket(client_fd);
 #else
-        close(client_fd);
+            close(client_fd);
 #endif
+            continue;
+        }
+
+        // Add client connection
+        {
+            std::lock_guard<std::mutex> lock(clients_mutex_);
+            clients_[client_idx].socket_fd = client_fd;
+            clients_[client_idx].address = std::string(client_ip);
+            clients_[client_idx].active = true;
+        }
+
+        std::cout << "[IPC Server] Client connected from " << client_ip
+                  << " (slot " << client_idx << ", active: " << get_active_connections() << ")"
+                  << std::endl;
+
+        // Start client handler thread
+        clients_[client_idx].handler_thread = std::thread([this, client_idx]() {
+            handle_client_thread(client_idx);
+        });
     }
 }
 
-void IpcServer::handle_client(int client_fd)
+void IpcServer::handle_client_thread(int client_idx)
 {
-    // Read header first (16 bytes)
-    uint8_t header_buf[16];
-    size_t header_received = 0;
+    ClientConnection &client = clients_[client_idx];
 
-    while (header_received < 16)
+    while (running_.load() && client.active)
     {
-#ifdef _WIN32
-        int received = recv(client_fd, reinterpret_cast<char *>(header_buf + header_received), static_cast<int>(16 - header_received), 0);
-#else
-        ssize_t received = recv(client_fd, header_buf + header_received, 16 - header_received, 0);
-#endif
-        if (received <= 0)
-        {
-            return; // Connection closed or error
-        }
-        header_received += received;
-    }
+        // Read header first (16 bytes)
+        uint8_t header_buf[16];
+        size_t header_received = 0;
 
-    // Parse header
-    size_t offset = 0;
-    uint32_t magic, length, command_type, sequence_id;
-
-    if (!IpcSerializer::deserialize_u32(header_buf, 16, magic, offset))
-        return;
-    if (!IpcSerializer::deserialize_u32(header_buf, 16, length, offset))
-        return;
-    if (!IpcSerializer::deserialize_u32(header_buf, 16, command_type, offset))
-        return;
-    if (!IpcSerializer::deserialize_u32(header_buf, 16, sequence_id, offset))
-        return;
-
-    // Verify magic
-    if (magic != IPC_MAGIC)
-    {
-        std::cerr << "[IPC Server] Invalid magic number: 0x" << std::hex << magic << std::endl;
-        return;
-    }
-
-    // Check payload length
-    if (length > MAX_PAYLOAD_SIZE)
-    {
-        std::cerr << "[IPC Server] Payload too large: " << length << std::endl;
-        return;
-    }
-
-    // Read payload if any
-    std::vector<uint8_t> payload;
-    if (length > 0)
-    {
-        payload.resize(length);
-        size_t payload_received = 0;
-
-        while (payload_received < length)
+        while (header_received < 16)
         {
 #ifdef _WIN32
-            int received = recv(client_fd, reinterpret_cast<char *>(payload.data() + payload_received), static_cast<int>(length - payload_received), 0);
+            int received = recv(client.socket_fd, reinterpret_cast<char *>(header_buf + header_received),
+                                static_cast<int>(16 - header_received), 0);
 #else
-            ssize_t received = recv(client_fd, payload.data() + payload_received, length - payload_received, 0);
+            ssize_t received = recv(client.socket_fd, header_buf + header_received, 16 - header_received, 0);
 #endif
             if (received <= 0)
             {
-                return; // Connection closed or error
+                // Connection closed or error
+                std::cout << "[IPC Server] Client " << client_idx << " disconnected" << std::endl;
+                client.active = false;
+                goto cleanup;
             }
-            payload_received += received;
+            header_received += received;
+        }
+
+        // Parse header
+        size_t offset = 0;
+        uint32_t magic, length, command_type, sequence_id;
+
+        if (!IpcSerializer::deserialize_u32(header_buf, 16, magic, offset))
+        {
+            std::cerr << "[IPC Server] Client " << client_idx << ": Failed to parse magic" << std::endl;
+            remove_client(client_idx);
+            return;
+        }
+        if (!IpcSerializer::deserialize_u32(header_buf, 16, length, offset))
+        {
+            std::cerr << "[IPC Server] Client " << client_idx << ": Failed to parse length" << std::endl;
+            remove_client(client_idx);
+            return;
+        }
+        if (!IpcSerializer::deserialize_u32(header_buf, 16, command_type, offset))
+        {
+            std::cerr << "[IPC Server] Client " << client_idx << ": Failed to parse command type" << std::endl;
+            remove_client(client_idx);
+            return;
+        }
+        if (!IpcSerializer::deserialize_u32(header_buf, 16, sequence_id, offset))
+        {
+            std::cerr << "[IPC Server] Client " << client_idx << ": Failed to parse sequence ID" << std::endl;
+            remove_client(client_idx);
+            return;
+        }
+
+        // Verify magic
+        if (magic != IPC_MAGIC)
+        {
+            std::cerr << "[IPC Server] Client " << client_idx << ": Invalid magic number: 0x"
+                      << std::hex << magic << std::endl;
+            remove_client(client_idx);
+            return;
+        }
+
+        // Check payload length
+        if (length > MAX_PAYLOAD_SIZE)
+        {
+            std::cerr << "[IPC Server] Client " << client_idx << ": Payload too large: " << length << std::endl;
+            remove_client(client_idx);
+            return;
+        }
+
+        // Read payload if any
+        std::vector<uint8_t> payload;
+        if (length > 0)
+        {
+            payload.resize(length);
+            size_t payload_received = 0;
+
+            while (payload_received < length)
+            {
+#ifdef _WIN32
+                int received = recv(client.socket_fd,
+                                    reinterpret_cast<char *>(payload.data() + payload_received),
+                                    static_cast<int>(length - payload_received), 0);
+#else
+                ssize_t received = recv(client.socket_fd, payload.data() + payload_received,
+                                        length - payload_received, 0);
+#endif
+                if (received <= 0)
+                {
+                    std::cout << "[IPC Server] Client " << client_idx << " disconnected during payload read"
+                              << std::endl;
+                    remove_client(client_idx);
+                    return;
+                }
+                payload_received += received;
+            }
+        }
+
+        // Build full request
+        std::vector<uint8_t> request;
+        request.insert(request.end(), header_buf, header_buf + 16);
+        request.insert(request.end(), payload.begin(), payload.end());
+
+        // Process command
+        auto response = process_command(request);
+
+        // Send response
+        if (!response.empty())
+        {
+#ifdef _WIN32
+            send(client.socket_fd, reinterpret_cast<const char *>(response.data()),
+                 static_cast<int>(response.size()), 0);
+#else
+            send(client.socket_fd, response.data(), response.size(), 0);
+#endif
         }
     }
 
-    // Build full request
-    std::vector<uint8_t> request;
-    request.insert(request.end(), header_buf, header_buf + 16);
-    request.insert(request.end(), payload.begin(), payload.end());
+cleanup:
+    std::cout << "[IPC Server] Thread " << client_idx << " exiting" << std::endl;
 
-    // Process command
-    auto response = process_command(request);
-
-    // Send response
-    if (!response.empty())
-    {
+    // Close socket (this must be done in the thread before exit)
 #ifdef _WIN32
-        send(client_fd, reinterpret_cast<const char *>(response.data()), static_cast<int>(response.size()), 0);
-#else
-        send(client_fd, response.data(), response.size(), 0);
-#endif
+    if (client.socket_fd != INVALID_SOCKET)
+    {
+        closesocket(client.socket_fd);
+        client.socket_fd = INVALID_SOCKET;
     }
+#else
+    if (client.socket_fd >= 0)
+    {
+        close(client.socket_fd);
+        client.socket_fd = -1;
+    }
+#endif
 }
 
 std::vector<uint8_t> IpcServer::process_command(const std::vector<uint8_t> &request)
@@ -471,8 +594,7 @@ IpcServer::handle_read(const std::vector<uint8_t> &payload)
     for (const auto &info : results)
     {
         auto sms_bytes = PayloadSerializer::serialize_sms_info(info);
-        response_payload.insert(response_payload.end(), sms_bytes.begin(),
-                                sms_bytes.end());
+        response_payload.insert(response_payload.end(), sms_bytes.begin(), sms_bytes.end());
     }
 
     return IpcSerializer::serialize_response(Status::SUCCESS, 0,
@@ -514,8 +636,7 @@ IpcServer::handle_delete(const std::vector<uint8_t> &payload)
         {
             // Failed
             failed_indices.push_back(index);
-            std::cerr << "[IPC Server] Failed to delete index "
-                      << static_cast<int>(index) << ": " << error << std::endl;
+            std::cerr << "[IPC Server] Failed to delete index " << static_cast<int>(index) << ": " << error << std::endl;
         }
     }
 
@@ -578,22 +699,81 @@ IpcServer::handle_send(const std::vector<uint8_t> &payload)
 std::vector<uint8_t>
 IpcServer::handle_status(const std::vector<uint8_t> &payload)
 {
+    (void)payload;
     // Build response with basic status
     std::vector<uint8_t> response_payload;
     response_payload.push_back(1); // Connected (placeholder)
 
     std::string port_str = "[::1]:" + std::to_string(port_);
     auto port_bytes = IpcSerializer::serialize_str(port_str);
-    response_payload.insert(response_payload.end(), port_bytes.begin(),
-                            port_bytes.end());
+    response_payload.insert(response_payload.end(), port_bytes.begin(), port_bytes.end());
 
-    auto count_bytes =
-        IpcSerializer::serialize_u32(0); // Message count (placeholder)
-    response_payload.insert(response_payload.end(), count_bytes.begin(),
-                            count_bytes.end());
+    auto count_bytes = IpcSerializer::serialize_u32(0); // Message count (placeholder)
+    response_payload.insert(response_payload.end(), count_bytes.begin(), count_bytes.end());
 
-    return IpcSerializer::serialize_response(Status::SUCCESS, 0,
-                                             response_payload);
+    return IpcSerializer::serialize_response(Status::SUCCESS, 0, response_payload);
+}
+
+int IpcServer::get_active_connections() const
+{
+    int count = 0;
+    for (const auto &client : clients_)
+    {
+        if (client.active)
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
+int IpcServer::find_available_client_slot()
+{
+    std::lock_guard<std::mutex> lock(clients_mutex_);
+
+    for (int i = 0; i < MAX_CLIENTS; ++i)
+    {
+        if (!clients_[i].active)
+        {
+            return i;
+        }
+    }
+    return -1; // No available slot
+}
+
+void IpcServer::remove_client(int client_idx)
+{
+    std::lock_guard<std::mutex> lock(clients_mutex_);
+
+    if (client_idx < 0 || client_idx >= MAX_CLIENTS)
+    {
+        return;
+    }
+
+    ClientConnection &client = clients_[client_idx];
+
+    if (!client.active)
+    {
+        return; // Already removed
+    }
+
+    // Close socket to trigger thread exit
+#ifdef _WIN32
+    if (client.socket_fd != INVALID_SOCKET)
+    {
+        closesocket(client.socket_fd);
+        client.socket_fd = INVALID_SOCKET;
+    }
+#else
+    if (client.socket_fd >= 0)
+    {
+        close(client.socket_fd);
+        client.socket_fd = -1;
+    }
+#endif
+
+    // Mark as inactive (thread will exit on its own)
+    client.active = false;
 }
 
 } // namespace smsrelay::ipc

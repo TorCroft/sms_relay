@@ -21,6 +21,7 @@
 #include "common/app_config.h"
 #include "common/ipc/ipc_protocol.h"
 #include "common/ipc/ipc_serialization.h"
+#include "interactive_shell.h"
 #include "ipc/ipc_client.h"
 #include <functional>
 #include <iomanip>
@@ -778,6 +779,42 @@ int main(int argc, char *argv[])
     SetConsoleCP(CP_UTF8);
 #endif
 
-    CliApp app;
-    return app.run(argc, argv);
+    // Check if we're in interactive mode (no command provided)
+    bool interactive_mode = true;
+    std::string server = smsrelay::IPCServerDefaults::DEFAULT_SERVER;
+
+    // Parse arguments to check if a command is provided
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string arg = argv[i];
+
+        // Handle options
+        if (arg.find("--") == 0)
+        {
+            // This is an option, check if it needs a value
+            if (arg == "--server" && i + 1 < argc)
+            {
+                server = argv[++i];  // Skip the next argument (server value)
+            }
+            continue;
+        }
+
+        // If we found a non-option argument, it's a command
+        interactive_mode = false;
+        break;
+    }
+
+    if (interactive_mode)
+    {
+        // Interactive mode: use the parsed server address
+        std::cout << "Starting interactive mode..." << std::endl;
+        smsrelay::cli::InteractiveShell shell(server);
+        return shell.run();
+    }
+    else
+    {
+        // Single command mode
+        CliApp app;
+        return app.run(argc, argv);
+    }
 }

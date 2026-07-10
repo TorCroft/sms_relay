@@ -73,14 +73,16 @@ struct ForwardConfig
 // Default IPC server configuration constants
 namespace IPCServerDefaults {
     constexpr int DEFAULT_PORT = 7896;
-    constexpr const char* DEFAULT_HOST = "::1";
-    constexpr const char* DEFAULT_SERVER = "::1:7896"; // Combined "host:port" format
+    constexpr const char *DEFAULT_HOST = "::1";
+    constexpr const char *DEFAULT_SERVER = "::1:7896"; // Combined "host:port" format
+    constexpr int MAX_CLIENT_CONNECTIONS = 2;          // Maximum simultaneous client connections
 }
 
 struct IpcServerConfig
 {
-    int port = IPCServerDefaults::DEFAULT_PORT;          // IPC server port
-    std::string host = IPCServerDefaults::DEFAULT_HOST;  // IPC server host (IPv6 loopback)
+    int port = IPCServerDefaults::DEFAULT_PORT;                      // IPC server port
+    std::string host = IPCServerDefaults::DEFAULT_HOST;              // IPC server host (IPv6 loopback)
+    int max_connections = IPCServerDefaults::MAX_CLIENT_CONNECTIONS; // Max client connections
 };
 
 // =============================================================================
