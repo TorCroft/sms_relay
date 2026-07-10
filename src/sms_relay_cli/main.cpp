@@ -23,6 +23,7 @@
 #include "common/ipc/ipc_serialization.h"
 #include "interactive_shell.h"
 #include "ipc/ipc_client.h"
+#include <atomic>
 #include <csignal>
 #include <functional>
 #include <iomanip>

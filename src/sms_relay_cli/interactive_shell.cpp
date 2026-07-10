@@ -1,6 +1,7 @@
 #include "interactive_shell.h"
 #include "common/ipc/ipc_protocol.h"
 #include "common/ipc/ipc_serialization.h"
+#include <atomic>
 #include <csignal>
 #include <iomanip>
 #include <iostream>
