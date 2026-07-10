@@ -23,6 +23,7 @@
 #include "common/ipc/ipc_serialization.h"
 #include "interactive_shell.h"
 #include "ipc/ipc_client.h"
+#include <csignal>
 #include <functional>
 #include <iomanip>
 #include <iostream>
@@ -35,6 +36,34 @@
 #ifdef _WIN32
 #include <Windows.h>
 #endif
+
+// ============================================================================
+// Signal Handling
+// ============================================================================
+
+namespace {
+    std::atomic<bool> interrupt_requested{false};
+
+    void signal_handler(int signal)
+    {
+        if (signal == SIGINT || signal == SIGTERM)
+        {
+            // Only print on first signal
+            static std::atomic<bool> first_signal{true};
+            if (first_signal.exchange(false))
+            {
+                std::cout << "\n[Signal] Received interrupt signal, exiting gracefully..." << std::endl;
+                interrupt_requested.store(true);
+            }
+        }
+    }
+
+    void setup_signal_handlers()
+    {
+        std::signal(SIGINT, signal_handler);
+        std::signal(SIGTERM, signal_handler);
+    }
+}
 
 // Default server configuration (shared with server via app_config.h)
 // Use fully qualified names: smsrelay::IPCServerDefaults::*
@@ -778,6 +807,9 @@ int main(int argc, char *argv[])
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
 #endif
+
+    // Setup signal handlers for graceful exit
+    setup_signal_handlers();
 
     // Check if we're in interactive mode (no command provided)
     bool interactive_mode = true;

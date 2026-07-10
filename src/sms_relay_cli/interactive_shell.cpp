@@ -1,6 +1,7 @@
 #include "interactive_shell.h"
 #include "common/ipc/ipc_protocol.h"
 #include "common/ipc/ipc_serialization.h"
+#include <csignal>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -11,6 +12,46 @@
 #else
 #include <locale.h>
 #endif
+
+// ============================================================================
+// Signal Handling for Interactive Shell
+// ============================================================================
+
+namespace {
+    std::atomic<bool> shell_interrupt_requested{false};
+
+    void shell_signal_handler(int signal)
+    {
+        if (signal == SIGINT || signal == SIGTERM)
+        {
+            // Only print on first signal
+            static std::atomic<bool> first_signal{true};
+            if (first_signal.exchange(false))
+            {
+                std::cout << "\n[Signal] Interrupt received. Type 'exit' to quit or press Ctrl+C again to force exit." << std::endl;
+                shell_interrupt_requested.store(true);
+            }
+            else
+            {
+                // Force exit on second signal
+                std::cout << "\n[Signal] Force exit..." << std::endl;
+                std::exit(0);
+            }
+        }
+    }
+
+    void setup_shell_signal_handlers()
+    {
+        std::signal(SIGINT, shell_signal_handler);
+        std::signal(SIGTERM, shell_signal_handler);
+    }
+
+    void reset_shell_signal_handlers()
+    {
+        std::signal(SIGINT, SIG_DFL);
+        std::signal(SIGTERM, SIG_DFL);
+    }
+}
 
 using namespace smsrelay::cli;
 using namespace smsrelay::ipc;
@@ -321,12 +362,16 @@ void InteractiveShell::print_help()
 
 int InteractiveShell::run()
 {
+    // Setup signal handlers
+    setup_shell_signal_handlers();
+
     // Initialize REPL
     initialize_repl();
 
     // Connect to server
     if (!connect_to_server())
     {
+        reset_shell_signal_handlers();
         return 1;
     }
 
@@ -336,6 +381,14 @@ int InteractiveShell::run()
     // Main command loop
     while (running_)
     {
+        // Check for interrupt signal
+        if (shell_interrupt_requested.load())
+        {
+            std::cout << "\nInterrupt detected. Exiting gracefully..." << std::endl;
+            shell_interrupt_requested.store(false);
+            break;
+        }
+
         // Prompt
         std::string prompt = "sms> ";
 
@@ -391,6 +444,18 @@ int InteractiveShell::run()
             }
         }
     }
+
+    // Cleanup
+    if (client_ && client_->is_connected())
+    {
+        std::cout << "Disconnecting from server..." << std::endl;
+        client_->disconnect();
+    }
+
+    std::cout << "Interactive shell exited." << std::endl;
+
+    // Reset signal handlers
+    reset_shell_signal_handlers();
 
     return 0;
 }
@@ -452,6 +517,15 @@ InteractiveShell::get_command_handler(const std::string& command)
 int InteractiveShell::handle_exit(const std::vector<std::string>& /*args*/)
 {
     running_ = false;
+    std::cout << "Exiting...\n";
+
+    // Disconnect from server
+    if (client_ && client_->is_connected())
+    {
+        std::cout << "Closing connection..." << std::endl;
+        client_->disconnect();
+    }
+
     std::cout << "Goodbye!\n";
     return 0;
 }

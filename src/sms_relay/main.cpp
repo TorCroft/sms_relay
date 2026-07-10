@@ -112,6 +112,31 @@ public:
     }
 
     /**
+     * @brief Gracefully shutdown the application
+     */
+    void graceful_shutdown()
+    {
+        std::cout << "\n=== Initiating graceful shutdown... ===" << std::endl;
+
+        // First, signal all components to stop
+        if (ipc_server_)
+        {
+            std::cout << "[IPC Server] Stopping..." << std::endl;
+            ipc_server_->stop();
+        }
+
+        // Stop IO context to unblock all async operations
+        if (io_ctx_)
+        {
+            std::cout << "[IO Context] Stopping..." << std::endl;
+            io_ctx_->stop();
+        }
+
+        // Note: Serial port and other resources will be cleaned up by destructors
+        std::cout << "[System] Shutdown complete" << std::endl;
+    }
+
+    /**
      * @brief Start the SMS relay service
      * @return true if started successfully
      */
@@ -175,12 +200,15 @@ public:
         std::signal(SIGINT, signal_handler);
         std::signal(SIGTERM, signal_handler);
 
+        std::cout << "[System] Running. Press Ctrl+C to stop." << std::endl;
+
         // Wait for shutdown signal or IO thread completion
         while (!is_shutdown_requested())
         {
             // Check if IO thread is still alive
             if (!io_thread_ || !io_thread_->joinable())
             {
+                std::cout << "[System] IO thread exited unexpectedly" << std::endl;
                 break; // IO thread has exited
             }
 
@@ -189,34 +217,25 @@ public:
         }
 
         // Perform graceful shutdown in main thread
-        stop();
+        graceful_shutdown();
 
         // Join IO thread
         if (io_thread_ && io_thread_->joinable())
         {
+            std::cout << "[System] Waiting for IO thread to finish..." << std::endl;
             io_thread_->join();
+            std::cout << "[System] IO thread finished" << std::endl;
         }
+
+        std::cout << "[System] All cleanup completed. Goodbye!" << std::endl;
     }
 
     /**
-     * @brief Stop the service
+     * @brief Stop the service (legacy method, calls graceful_shutdown)
      */
     void stop()
     {
-        std::cout << "\n=== Shutting down... ===" << std::endl;
-
-        if (ipc_server_)
-        {
-            std::cout << "[IPC Server] Stopping..." << std::endl;
-            ipc_server_->stop();
-        }
-
-        if (io_ctx_)
-        {
-            io_ctx_->stop();
-        }
-
-        std::cout << "Service stopped" << std::endl;
+        graceful_shutdown();
     }
 
 private:
@@ -477,16 +496,23 @@ void signal_handler(int signal)
         static std::atomic<bool> first_signal{true};
         if (first_signal.exchange(false))
         {
-            std::cout << "\nReceived signal " << signal << ", shutting down..." << std::endl;
-            std::cout << "Exiting immediately (Ctrl+C)..." << std::endl;
+            std::cout << "\n[Signal] Received signal " << signal << " (SIGINT/SIGTERM)" << std::endl;
+            std::cout << "[Signal] Initiating graceful shutdown..." << std::endl;
 
-            // 立即退出，避免所有阻塞和资源清理问题
-            // 操作系统会自动清理所有资源
-#ifdef _WIN32
-            ExitProcess(0);  // Windows
-#else
-            _exit(0);         // Linux/Unix
-#endif
+            // Request shutdown (this will make run() exit its loop)
+            SmsRelayApp::request_shutdown();
+
+            // Stop IO context to unblock any async operations
+            // This is safe because we're about to exit anyway
+            if (SmsRelayApp::get_instance())
+            {
+                SmsRelayApp::get_instance()->stop_io_context();
+            }
+        }
+        else
+        {
+            std::cout << "[Signal] Shutdown already in progress..." << std::endl;
+            std::cout << "[Signal] Press Ctrl+C again to force exit" << std::endl;
         }
     }
 }
