@@ -19,39 +19,39 @@
 // ============================================================================
 
 namespace {
-    std::atomic<bool> shell_interrupt_requested{false};
+std::atomic<bool> shell_interrupt_requested{false};
 
-    void shell_signal_handler(int signal)
+void shell_signal_handler(int signal)
+{
+    if (signal == SIGINT || signal == SIGTERM)
     {
-        if (signal == SIGINT || signal == SIGTERM)
+        // Only print on first signal
+        static std::atomic<bool> first_signal{true};
+        if (first_signal.exchange(false))
         {
-            // Only print on first signal
-            static std::atomic<bool> first_signal{true};
-            if (first_signal.exchange(false))
-            {
-                std::cout << "\n[Signal] Interrupt received. Type 'exit' to quit or press Ctrl+C again to force exit." << std::endl;
-                shell_interrupt_requested.store(true);
-            }
-            else
-            {
-                // Force exit on second signal
-                std::cout << "\n[Signal] Force exit..." << std::endl;
-                std::exit(0);
-            }
+            std::cout << "\n[Signal] Interrupt received. Type 'exit' to quit or press Ctrl+C again to force exit." << std::endl;
+            shell_interrupt_requested.store(true);
+        }
+        else
+        {
+            // Force exit on second signal
+            std::cout << "\n[Signal] Force exit..." << std::endl;
+            std::exit(0);
         }
     }
+}
 
-    void setup_shell_signal_handlers()
-    {
-        std::signal(SIGINT, shell_signal_handler);
-        std::signal(SIGTERM, shell_signal_handler);
-    }
+void setup_shell_signal_handlers()
+{
+    std::signal(SIGINT, shell_signal_handler);
+    std::signal(SIGTERM, shell_signal_handler);
+}
 
-    void reset_shell_signal_handlers()
-    {
-        std::signal(SIGINT, SIG_DFL);
-        std::signal(SIGTERM, SIG_DFL);
-    }
+void reset_shell_signal_handlers()
+{
+    std::signal(SIGINT, SIG_DFL);
+    std::signal(SIGTERM, SIG_DFL);
+}
 }
 
 using namespace smsrelay::cli;
@@ -99,16 +99,16 @@ static std::string status_to_string(uint8_t status)
 {
     switch (status)
     {
-    case 0:
-        return "UNREAD";
-    case 1:
-        return "READ";
-    case 2:
-        return "UNSENT";
-    case 3:
-        return "SENT";
-    default:
-        return "UNKNOWN";
+        case 0:
+            return "UNREAD";
+        case 1:
+            return "READ";
+        case 2:
+            return "UNSENT";
+        case 3:
+            return "SENT";
+        default:
+            return "UNKNOWN";
     }
 }
 
@@ -152,14 +152,15 @@ static void print_sms_info_full(const SmsInfo &sms)
     std::cout << "From: " << sms.sender << std::endl;
     std::cout << "Time: " << sms.timestamp << std::endl;
     std::cout << "Text: " << sms.text << std::endl;
-    std::cout << "============================\n" << std::endl;
+    std::cout << "============================\n"
+              << std::endl;
 }
 
 // ============================================================================
 // InteractiveShell Implementation
 // ============================================================================
 
-InteractiveShell::InteractiveShell(const std::string& server)
+InteractiveShell::InteractiveShell(const std::string &server)
     : server_(server), running_(true)
 {
     parse_server_string(server, host_, port_);
@@ -218,10 +219,9 @@ void InteractiveShell::setup_completion()
 {
     // Register command completion
     std::vector<std::string> commands = {
-        "list", "read", "delete", "send", "status", "help", "exit", "reconnect"
-    };
+        "list", "read", "delete", "send", "status", "help", "exit", "reconnect"};
 
-    replx_->set_completion_callback([&](const std::string& input, int& contextLen) {
+    replx_->set_completion_callback([&](const std::string &input, int &contextLen) {
         std::vector<Replxx::Completion> completions;
 
         // Find the last word boundary
@@ -238,7 +238,7 @@ void InteractiveShell::setup_completion()
         // Complete commands
         if (word_start == 0 || input[word_start - 1] == ' ')
         {
-            for (const auto& cmd : commands)
+            for (const auto &cmd : commands)
             {
                 if (cmd.rfind(prefix, 0) == 0)
                 {
@@ -255,11 +255,10 @@ void InteractiveShell::setup_completion()
 void InteractiveShell::setup_highlighting()
 {
     // Set up syntax highlighting for commands
-    replx_->set_highlighter_callback([&](const std::string& input, std::vector<Replxx::Color>& colors) {
+    replx_->set_highlighter_callback([&](const std::string &input, std::vector<Replxx::Color> &colors) {
         // Simple command highlighting
         std::vector<std::string> commands = {
-            "list", "read", "delete", "send", "status", "help", "exit", "reconnect"
-        };
+            "list", "read", "delete", "send", "status", "help", "exit", "reconnect"};
 
         // Initialize all colors to DEFAULT
         colors.resize(input.length(), Replxx::Color::DEFAULT);
@@ -287,7 +286,7 @@ void InteractiveShell::setup_highlighting()
                 std::string word = input.substr(word_start, word_end - word_start);
 
                 // Check if it matches a command
-                for (const auto& cmd : commands)
+                for (const auto &cmd : commands)
                 {
                     if (word == cmd)
                     {
@@ -318,8 +317,8 @@ bool InteractiveShell::connect_to_server()
     return true;
 }
 
-void InteractiveShell::parse_command_line(const std::string& input, std::string& command,
-                                         std::vector<std::string>& args)
+void InteractiveShell::parse_command_line(const std::string &input, std::string &command,
+                                          std::vector<std::string> &args)
 {
     std::stringstream ss(input);
     std::string token;
@@ -394,7 +393,7 @@ int InteractiveShell::run()
         std::string prompt = "sms> ";
 
         // Read input
-        auto* input = replx_->input(prompt);
+        auto *input = replx_->input(prompt);
 
         if (input == nullptr)
         {
@@ -433,7 +432,7 @@ int InteractiveShell::run()
                         std::cout << "Command failed with exit code " << exit_code << "\n";
                     }
                 }
-                catch (const std::exception& e)
+                catch (const std::exception &e)
                 {
                     std::cerr << "Exception: " << e.what() << std::endl;
                 }
@@ -461,7 +460,7 @@ int InteractiveShell::run()
     return 0;
 }
 
-int InteractiveShell::execute_command(const std::string& command_line)
+int InteractiveShell::execute_command(const std::string &command_line)
 {
     std::string command;
     std::vector<std::string> args;
@@ -476,7 +475,7 @@ int InteractiveShell::execute_command(const std::string& command_line)
             {
                 return handler(args);
             }
-            catch (const std::exception& e)
+            catch (const std::exception &e)
             {
                 std::cerr << "Exception: " << e.what() << std::endl;
                 return 1;
@@ -492,19 +491,19 @@ int InteractiveShell::execute_command(const std::string& command_line)
     return 0;
 }
 
-std::function<int(const std::vector<std::string>&)>
-InteractiveShell::get_command_handler(const std::string& command)
+std::function<int(const std::vector<std::string> &)>
+InteractiveShell::get_command_handler(const std::string &command)
 {
-    static const std::map<std::string, std::function<int(const std::vector<std::string>&)>>
+    static const std::map<std::string, std::function<int(const std::vector<std::string> &)>>
         handlers = {
-            {"exit", [this](const auto& args) { return handle_exit(args); }},
-            {"help", [this](const auto& args) { return handle_help(args); }},
-            {"list", [this](const auto& args) { return handle_list(args); }},
-            {"read", [this](const auto& args) { return handle_read(args); }},
-            {"delete", [this](const auto& args) { return handle_delete(args); }},
-            {"send", [this](const auto& args) { return handle_send(args); }},
-            {"status", [this](const auto& args) { return handle_status(args); }},
-            {"reconnect", [this](const auto& args) { return handle_reconnect(args); }},
+            {"exit", [this](const auto &args) { return handle_exit(args); }},
+            {"help", [this](const auto &args) { return handle_help(args); }},
+            {"list", [this](const auto &args) { return handle_list(args); }},
+            {"read", [this](const auto &args) { return handle_read(args); }},
+            {"delete", [this](const auto &args) { return handle_delete(args); }},
+            {"send", [this](const auto &args) { return handle_send(args); }},
+            {"status", [this](const auto &args) { return handle_status(args); }},
+            {"reconnect", [this](const auto &args) { return handle_reconnect(args); }},
         };
 
     auto it = handlers.find(command);
@@ -515,7 +514,7 @@ InteractiveShell::get_command_handler(const std::string& command)
     return nullptr;
 }
 
-int InteractiveShell::handle_exit(const std::vector<std::string>& /*args*/)
+int InteractiveShell::handle_exit(const std::vector<std::string> & /*args*/)
 {
     running_ = false;
     std::cout << "Exiting...\n";
@@ -531,13 +530,13 @@ int InteractiveShell::handle_exit(const std::vector<std::string>& /*args*/)
     return 0;
 }
 
-int InteractiveShell::handle_help(const std::vector<std::string>& /*args*/)
+int InteractiveShell::handle_help(const std::vector<std::string> & /*args*/)
 {
     print_help();
     return 0;
 }
 
-int InteractiveShell::handle_list(const std::vector<std::string>& args)
+int InteractiveShell::handle_list(const std::vector<std::string> &args)
 {
     if (!client_ || !client_->is_connected())
     {
@@ -593,7 +592,8 @@ int InteractiveShell::handle_list(const std::vector<std::string>& args)
         return 1;
     }
 
-    std::cout << "Total messages: " << count << "\n" << std::endl;
+    std::cout << "Total messages: " << count << "\n"
+              << std::endl;
 
     // Collect all messages first
     std::vector<SmsInfo> messages;
@@ -612,7 +612,7 @@ int InteractiveShell::handle_list(const std::vector<std::string>& args)
     return 0;
 }
 
-int InteractiveShell::handle_read(const std::vector<std::string>& args)
+int InteractiveShell::handle_read(const std::vector<std::string> &args)
 {
     if (!client_ || !client_->is_connected())
     {
@@ -693,7 +693,7 @@ int InteractiveShell::handle_read(const std::vector<std::string>& args)
     return 0;
 }
 
-int InteractiveShell::handle_delete(const std::vector<std::string>& args)
+int InteractiveShell::handle_delete(const std::vector<std::string> &args)
 {
     if (!client_ || !client_->is_connected())
     {
@@ -778,7 +778,7 @@ int InteractiveShell::handle_delete(const std::vector<std::string>& args)
     return 0;
 }
 
-int InteractiveShell::handle_send(const std::vector<std::string>& args)
+int InteractiveShell::handle_send(const std::vector<std::string> &args)
 {
     if (!client_ || !client_->is_connected())
     {
@@ -848,7 +848,7 @@ int InteractiveShell::handle_send(const std::vector<std::string>& args)
     return 0;
 }
 
-int InteractiveShell::handle_status(const std::vector<std::string>& /*args*/)
+int InteractiveShell::handle_status(const std::vector<std::string> & /*args*/)
 {
     if (!client_ || !client_->is_connected())
     {
@@ -903,7 +903,7 @@ int InteractiveShell::handle_status(const std::vector<std::string>& /*args*/)
     return 0;
 }
 
-int InteractiveShell::handle_reconnect(const std::vector<std::string>& /*args*/)
+int InteractiveShell::handle_reconnect(const std::vector<std::string> & /*args*/)
 {
     std::cout << "Reconnecting to " << server_ << "..." << std::endl;
 

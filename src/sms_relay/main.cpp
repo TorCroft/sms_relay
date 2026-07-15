@@ -31,14 +31,13 @@ void signal_handler(int signal);
 // Application Constants
 // ============================================================================
 
-namespace
-{
-    // Connection management
-    constexpr int CONNECTION_TIMEOUT_SECONDS = 5;
-    constexpr auto MODEM_STABILIZATION_DELAY = std::chrono::milliseconds(1000);
+namespace {
+// Connection management
+constexpr int CONNECTION_TIMEOUT_SECONDS = 5;
+constexpr auto MODEM_STABILIZATION_DELAY = std::chrono::milliseconds(1000);
 
-    // Message deletion timing
-    constexpr auto MESSAGE_DELETE_DELAY = std::chrono::milliseconds(50);
+// Message deletion timing
+constexpr auto MESSAGE_DELETE_DELAY = std::chrono::milliseconds(50);
 } // namespace
 
 using namespace smsrelay;
@@ -126,7 +125,6 @@ public:
         // Stop IO context to unblock all async operations
         if (io_ctx_)
         {
-            std::cout << "[IO Context] Stopping..." << std::endl;
             io_ctx_->stop();
         }
 
@@ -256,8 +254,7 @@ private:
     void setup_callbacks()
     {
         // Set up connection callback
-        transport_->set_connection_callback([this](bool connected)
-                                            {
+        transport_->set_connection_callback([this](bool connected) {
             if (connected)
             {
                 std::cout << "[Transport] Connected to " << config_.serial.port
@@ -281,8 +278,7 @@ private:
 
         // URC callback to forward +CMTI to SMS service
         at_session_->set_urc_callback(
-            [this](const std::string &urc, const std::string &args)
-            {
+            [this](const std::string &urc, const std::string &args) {
                 on_urc(urc, args);
             });
     }

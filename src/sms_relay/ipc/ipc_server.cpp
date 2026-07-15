@@ -126,8 +126,6 @@ void IpcServer::stop()
         return;
     }
 
-    std::cout << "[IPC Server] Stopping..." << std::endl;
-
     // First, stop accepting new connections
     running_.store(false);
 
@@ -177,7 +175,6 @@ void IpcServer::stop()
     // Try to join server thread with timeout
     if (server_thread_.joinable())
     {
-        std::cout << "[IPC Server] Waiting for accept thread to finish..." << std::endl;
         server_thread_.join();
         std::cout << "[IPC Server] Accept thread finished" << std::endl;
     }
@@ -228,7 +225,7 @@ void IpcServer::accept_loop()
         if (client_fd < 0)
 #endif
         {
-            if(!running_.load())
+            if (!running_.load())
             {
                 break;
             }
@@ -252,8 +249,7 @@ void IpcServer::accept_loop()
         int client_idx = find_available_client_slot();
         if (client_idx < 0)
         {
-            std::cerr << "[IPC Server] Maximum connections reached, rejecting client from "
-                      << client_ip << std::endl;
+            std::cerr << "[IPC Server] Maximum connections reached, rejecting client from " << client_ip << std::endl;
 #ifdef _WIN32
             closesocket(client_fd);
 #else
@@ -407,8 +403,7 @@ void IpcServer::handle_client_thread(int client_idx)
         if (!response.empty())
         {
 #ifdef _WIN32
-            send(client.socket_fd, reinterpret_cast<const char *>(response.data()),
-                 static_cast<int>(response.size()), 0);
+            send(client.socket_fd, reinterpret_cast<const char *>(response.data()), static_cast<int>(response.size()), 0);
 #else
             send(client.socket_fd, response.data(), response.size(), 0);
 #endif
@@ -416,8 +411,6 @@ void IpcServer::handle_client_thread(int client_idx)
     }
 
 cleanup:
-    std::cout << "[IPC Server] Thread " << client_idx << " exiting" << std::endl;
-
     // Properly close socket to prevent resource leaks
     {
         std::lock_guard<std::mutex> lock(clients_mutex_);

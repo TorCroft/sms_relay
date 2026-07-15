@@ -32,8 +32,7 @@ public:
      * @param host Server hostname or IP (default: from shared config)
      * @param port TCP port number (default: from shared config)
      */
-    IpcClient(const std::string &host = smsrelay::IPCServerDefaults::DEFAULT_HOST,
-              int port = smsrelay::IPCServerDefaults::DEFAULT_PORT);
+    IpcClient(const std::string &host = smsrelay::IPCServerDefaults::DEFAULT_HOST, int port = smsrelay::IPCServerDefaults::DEFAULT_PORT);
 
     ~IpcClient();
 

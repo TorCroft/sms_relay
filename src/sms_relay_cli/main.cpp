@@ -43,27 +43,27 @@
 // ============================================================================
 
 namespace {
-    std::atomic<bool> interrupt_requested{false};
+std::atomic<bool> interrupt_requested{false};
 
-    void signal_handler(int signal)
+void signal_handler(int signal)
+{
+    if (signal == SIGINT || signal == SIGTERM)
     {
-        if (signal == SIGINT || signal == SIGTERM)
+        // Only print on first signal
+        static std::atomic<bool> first_signal{true};
+        if (first_signal.exchange(false))
         {
-            // Only print on first signal
-            static std::atomic<bool> first_signal{true};
-            if (first_signal.exchange(false))
-            {
-                std::cout << "\n[Signal] Received interrupt signal, exiting gracefully..." << std::endl;
-                interrupt_requested.store(true);
-            }
+            std::cout << "\n[Signal] Received interrupt signal, exiting gracefully..." << std::endl;
+            interrupt_requested.store(true);
         }
     }
+}
 
-    void setup_signal_handlers()
-    {
-        std::signal(SIGINT, signal_handler);
-        std::signal(SIGTERM, signal_handler);
-    }
+void setup_signal_handlers()
+{
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
+}
 }
 
 // Default server configuration (shared with server via app_config.h)
@@ -175,7 +175,8 @@ void print_sms_info_full(const SmsInfo &sms)
     std::cout << "From: " << sms.sender << std::endl;
     std::cout << "Time: " << sms.timestamp << std::endl;
     std::cout << "Text: " << sms.text << std::endl;
-    std::cout << "============================\n" << std::endl;
+    std::cout << "============================\n"
+              << std::endl;
 }
 
 // ============================================================================
@@ -280,7 +281,8 @@ public:
             return 1;
         }
 
-        std::cout << "Total messages: " << count << "\n" << std::endl;
+        std::cout << "Total messages: " << count << "\n"
+                  << std::endl;
 
         // Collect all messages first
         std::vector<SmsInfo> messages;
@@ -774,7 +776,8 @@ private:
         std::cout << "Commands:\n";
         std::cout << "  list [--status STATUS]       List all SMS (status: ALL, REC UNREAD, etc.)\n";
         std::cout << "  read --index INDICES         Read specific SMS (comma-separated: 1,2,3)\n";
-        std::cout << "  delete --index INDICES       Delete SMS (comma-separated: " "1,2,3)\n";
+        std::cout << "  delete --index INDICES       Delete SMS (comma-separated: "
+                     "1,2,3)\n";
         std::cout << "  send --to NUMBER --text TEXT  Send new SMS\n";
         std::cout << "  status                          Get service status\n\n";
         std::cout << "Options:\n";
@@ -827,7 +830,7 @@ int main(int argc, char *argv[])
             // This is an option, check if it needs a value
             if (arg == "--server" && i + 1 < argc)
             {
-                server = argv[++i];  // Skip the next argument (server value)
+                server = argv[++i]; // Skip the next argument (server value)
             }
             continue;
         }
