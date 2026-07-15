@@ -120,7 +120,6 @@ public:
         // First, signal all components to stop
         if (ipc_server_)
         {
-            std::cout << "[IPC Server] Stopping..." << std::endl;
             ipc_server_->stop();
         }
 
@@ -278,9 +277,7 @@ private:
             } });
 
         // Callback for new SMS
-        sms_service_->set_new_sms_callback(
-            [this](const IncomingSms &sms)
-            { on_new_sms(sms); });
+        sms_service_->set_new_sms_callback([this](const IncomingSms &sms) { on_new_sms(sms); });
 
         // URC callback to forward +CMTI to SMS service
         at_session_->set_urc_callback(
@@ -295,8 +292,7 @@ private:
      */
     void start_io_thread()
     {
-        io_thread_ = std::make_unique<std::thread>([this]()
-                                                   { io_ctx_->run(); });
+        io_thread_ = std::make_unique<std::thread>([this]() { io_ctx_->run(); });
         at_session_->start();
     }
 

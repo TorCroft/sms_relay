@@ -55,12 +55,11 @@ bool IpcServer::start()
 #ifdef _WIN32
     server_fd_ = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
     if (server_fd_ == INVALID_SOCKET)
-    {
 #else
     server_fd_ = socket(AF_INET6, SOCK_STREAM, 0);
     if (server_fd_ < 0)
-    {
 #endif
+    {
         std::cerr << "[IPC Server] Failed to create socket" << std::endl;
         return false;
     }
@@ -70,11 +69,9 @@ bool IpcServer::start()
     int v6only = 0;
 
 #ifdef _WIN32
-    setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR,
-               reinterpret_cast<const char *>(&reuse), sizeof(reuse));
+    setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&reuse), sizeof(reuse));
 
-    setsockopt(server_fd_, IPPROTO_IPV6, IPV6_V6ONLY,
-               reinterpret_cast<const char *>(&v6only), sizeof(v6only));
+    setsockopt(server_fd_, IPPROTO_IPV6, IPV6_V6ONLY, reinterpret_cast<const char *>(&v6only), sizeof(v6only));
 #else
     setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 
@@ -144,6 +141,7 @@ void IpcServer::stop()
 #else
     if (server_fd_ >= 0)
     {
+        shutdown(server_fd_, SHUT_RDWR);
         close(server_fd_);
         server_fd_ = -1;
     }
@@ -176,9 +174,6 @@ void IpcServer::stop()
         }
     }
 
-    // Give threads a moment to notice the socket closure and exit naturally
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
     // Try to join server thread with timeout
     if (server_thread_.joinable())
     {
@@ -189,20 +184,17 @@ void IpcServer::stop()
 
     // Try to join all client threads with timeout
     {
-        std::lock_guard<std::mutex> lock(clients_mutex_);
-        int joined_count = 0;
         for (int i = 0; i < MAX_CLIENTS; ++i)
         {
             if (clients_[i].handler_thread.joinable())
             {
-                std::cout << "[IPC Server] Waiting for client thread " << i << " to finish..." << std::endl;
+                std::cout
+                    << "[IPC Server] Waiting for client thread "
+                    << i << " to finish..."
+                    << std::endl;
+
                 clients_[i].handler_thread.join();
-                joined_count++;
             }
-        }
-        if (joined_count > 0)
-        {
-            std::cout << "[IPC Server] All " << joined_count << " client threads finished" << std::endl;
         }
     }
 
@@ -226,34 +218,21 @@ void IpcServer::accept_loop()
         socklen_t addr_len = sizeof(client_addr);
 #endif
 
+        int fd = server_fd_;
+
 #ifdef _WIN32
-        SOCKET client_fd =
-            accept(server_fd_, reinterpret_cast<struct sockaddr *>(&client_addr),
-                   &addr_len);
+        SOCKET client_fd = accept(fd, reinterpret_cast<struct sockaddr *>(&client_addr), &addr_len);
         if (client_fd == INVALID_SOCKET)
-        {
 #else
-        int client_fd =
-            accept(server_fd_, reinterpret_cast<struct sockaddr *>(&client_addr),
-                   &addr_len);
+        int client_fd = accept(fd, reinterpret_cast<struct sockaddr *>(&client_addr), &addr_len);
         if (client_fd < 0)
+#endif
         {
-#endif
-            if (running_.load())
+            if(!running_.load())
             {
-#ifdef _WIN32
-                int error = WSAGetLastError();
-                if (error != WSAEINTR)
-                {
-                    std::cerr << "[IPC Server] Accept failed: " << error << std::endl;
-                }
-#else
-                if (errno != EINTR)
-                {
-                    std::cerr << "[IPC Server] Accept failed: " << errno << std::endl;
-                }
-#endif
+                break;
             }
+
             continue;
         }
 
