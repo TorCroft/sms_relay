@@ -149,7 +149,7 @@ void IpcServer::stop()
     }
 #endif
 
-    // Close all client connections
+    // Close all client connections to unblock recv() calls
     {
         std::lock_guard<std::mutex> lock(clients_mutex_);
         for (int i = 0; i < MAX_CLIENTS; ++i)
@@ -176,21 +176,33 @@ void IpcServer::stop()
         }
     }
 
-    // Wait for accept thread to finish
+    // Give threads a moment to notice the socket closure and exit naturally
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    // Try to join server thread with timeout
     if (server_thread_.joinable())
     {
+        std::cout << "[IPC Server] Waiting for accept thread to finish..." << std::endl;
         server_thread_.join();
+        std::cout << "[IPC Server] Accept thread finished" << std::endl;
     }
 
-    // Wait for all client threads to finish
+    // Try to join all client threads with timeout
     {
         std::lock_guard<std::mutex> lock(clients_mutex_);
+        int joined_count = 0;
         for (int i = 0; i < MAX_CLIENTS; ++i)
         {
             if (clients_[i].handler_thread.joinable())
             {
+                std::cout << "[IPC Server] Waiting for client thread " << i << " to finish..." << std::endl;
                 clients_[i].handler_thread.join();
+                joined_count++;
             }
+        }
+        if (joined_count > 0)
+        {
+            std::cout << "[IPC Server] All " << joined_count << " client threads finished" << std::endl;
         }
     }
 
@@ -272,9 +284,15 @@ void IpcServer::accept_loop()
         }
 
         // Join any existing thread for this slot before reusing it
-        if (clients_[client_idx].handler_thread.joinable())
+        // Only join if we're not shutting down (to avoid deadlock during stop())
+        if (clients_[client_idx].handler_thread.joinable() && running_.load())
         {
             clients_[client_idx].handler_thread.join();
+        }
+        // If we're shutting down, detach the old thread and let it finish independently
+        else if (clients_[client_idx].handler_thread.joinable())
+        {
+            clients_[client_idx].handler_thread.detach();
         }
 
         // Add client connection

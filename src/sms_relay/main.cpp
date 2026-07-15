@@ -31,13 +31,14 @@ void signal_handler(int signal);
 // Application Constants
 // ============================================================================
 
-namespace {
-// Connection management
-constexpr int CONNECTION_TIMEOUT_SECONDS = 5;
-constexpr auto MODEM_STABILIZATION_DELAY = std::chrono::milliseconds(1000);
+namespace
+{
+    // Connection management
+    constexpr int CONNECTION_TIMEOUT_SECONDS = 5;
+    constexpr auto MODEM_STABILIZATION_DELAY = std::chrono::milliseconds(1000);
 
-// Message deletion timing
-constexpr auto MESSAGE_DELETE_DELAY = std::chrono::milliseconds(50);
+    // Message deletion timing
+    constexpr auto MESSAGE_DELETE_DELAY = std::chrono::milliseconds(50);
 } // namespace
 
 using namespace smsrelay;
@@ -82,7 +83,7 @@ public:
      * @brief Get the current application instance
      * @return Pointer to the current instance, or nullptr if none
      */
-    static SmsRelayApp* get_instance() { return instance_; }
+    static SmsRelayApp *get_instance() { return instance_; }
 
     /**
      * @brief Check if shutdown was requested
@@ -114,10 +115,8 @@ public:
     /**
      * @brief Gracefully shutdown the application
      */
-    void graceful_shutdown()
+    void shutdown()
     {
-        std::cout << "\n=== Initiating graceful shutdown... ===" << std::endl;
-
         // First, signal all components to stop
         if (ipc_server_)
         {
@@ -196,46 +195,30 @@ public:
      */
     void run()
     {
-        // Register signal handlers
         std::signal(SIGINT, signal_handler);
         std::signal(SIGTERM, signal_handler);
 
         std::cout << "[System] Running. Press Ctrl+C to stop." << std::endl;
 
-        // Wait for shutdown signal or IO thread completion
-        while (!is_shutdown_requested())
-        {
-            // Check if IO thread is still alive
-            if (!io_thread_ || !io_thread_->joinable())
-            {
-                std::cout << "[System] IO thread exited unexpectedly" << std::endl;
-                break; // IO thread has exited
-            }
+        // 运行 IO 上下文（在主线程中）
+        io_ctx_->run();
 
-            // Small sleep to avoid busy waiting
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
+        // 正常退出流程
+        shutdown();
 
-        // Perform graceful shutdown in main thread
-        graceful_shutdown();
-
-        // Join IO thread
+        // 清理线程
         if (io_thread_ && io_thread_->joinable())
         {
-            std::cout << "[System] Waiting for IO thread to finish..." << std::endl;
             io_thread_->join();
-            std::cout << "[System] IO thread finished" << std::endl;
         }
-
-        std::cout << "[System] All cleanup completed. Goodbye!" << std::endl;
     }
 
     /**
-     * @brief Stop the service (legacy method, calls graceful_shutdown)
+     * @brief Stop the service (legacy method, calls shutdown)
      */
     void stop()
     {
-        graceful_shutdown();
+        shutdown();
     }
 
 private:
@@ -274,7 +257,8 @@ private:
     void setup_callbacks()
     {
         // Set up connection callback
-        transport_->set_connection_callback([this](bool connected) {
+        transport_->set_connection_callback([this](bool connected)
+                                            {
             if (connected)
             {
                 std::cout << "[Transport] Connected to " << config_.serial.port
@@ -291,16 +275,17 @@ private:
                     // Connection failed during initial attempt
                     connection_promise_.set_value(false);
                 }
-            }
-        });
+            } });
 
         // Callback for new SMS
         sms_service_->set_new_sms_callback(
-            [this](const IncomingSms &sms) { on_new_sms(sms); });
+            [this](const IncomingSms &sms)
+            { on_new_sms(sms); });
 
         // URC callback to forward +CMTI to SMS service
         at_session_->set_urc_callback(
-            [this](const std::string &urc, const std::string &args) {
+            [this](const std::string &urc, const std::string &args)
+            {
                 on_urc(urc, args);
             });
     }
@@ -310,7 +295,8 @@ private:
      */
     void start_io_thread()
     {
-        io_thread_ = std::make_unique<std::thread>([this]() { io_ctx_->run(); });
+        io_thread_ = std::make_unique<std::thread>([this]()
+                                                   { io_ctx_->run(); });
         at_session_->start();
     }
 
@@ -479,12 +465,12 @@ private:
     std::atomic<bool> connection_established_{false};
 
     // Global instance pointer for signal handler
-    static SmsRelayApp* instance_;
+    static SmsRelayApp *instance_;
     static std::atomic<bool> shutdown_requested_;
 };
 
 // Static member initialization
-SmsRelayApp* SmsRelayApp::instance_ = nullptr;
+SmsRelayApp *SmsRelayApp::instance_ = nullptr;
 std::atomic<bool> SmsRelayApp::shutdown_requested_{false};
 
 // Signal handler function
@@ -492,27 +478,27 @@ void signal_handler(int signal)
 {
     if (signal == SIGINT || signal == SIGTERM)
     {
-        // Only print on first signal
         static std::atomic<bool> first_signal{true};
         if (first_signal.exchange(false))
         {
-            std::cout << "\n[Signal] Received signal " << signal << " (SIGINT/SIGTERM)" << std::endl;
-            std::cout << "[Signal] Initiating graceful shutdown..." << std::endl;
+            std::cout << "\n[Signal] Received signal " << signal << std::endl;
 
-            // Request shutdown (this will make run() exit its loop)
+            // 先设置标志
             SmsRelayApp::request_shutdown();
 
-            // Stop IO context to unblock any async operations
-            // This is safe because we're about to exit anyway
-            if (SmsRelayApp::get_instance())
+            // 获取实例并停止
+            auto *app = SmsRelayApp::get_instance();
+            if (app)
             {
-                SmsRelayApp::get_instance()->stop_io_context();
+                // 直接停止，不等待
+                app->stop_io_context();
             }
         }
         else
         {
-            std::cout << "[Signal] Shutdown already in progress..." << std::endl;
-            std::cout << "[Signal] Press Ctrl+C again to force exit" << std::endl;
+            // 第二次按 Ctrl+C，强制退出
+            std::cout << "[Signal] Force exit" << std::endl;
+            std::exit(1);
         }
     }
 }
